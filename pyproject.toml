@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pvrp-rl-memoria"
+version = "0.1.0"
+description = "Resolución del PVRP mediante Aprendizaje por Refuerzo"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Javiera Elena Gutiérrez Abarca", email = "javiera.gutierreza@usm.cl" }
+]
+
+# =============================================================================
+#  Configuración de pytest
+# =============================================================================
+[tool.pytest.ini_options]
+# La raíz del proyecto se añade al PYTHONPATH para que `from src.xxx import yyy`
+# funcione tanto al correr `pytest` como al correr scripts manualmente.
+pythonpath = ["."]
+
+# Directorio donde pytest busca tests por defecto.
+testpaths = ["tests"]
+
+# Patrones de archivos y funciones de test (defaults explícitos).
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Verbosidad y formato de salida amigable.
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+
+# =============================================================================
+#  Configuración de setuptools (descubrimiento de paquetes)
+# =============================================================================
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

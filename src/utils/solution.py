@@ -14,14 +14,14 @@ Esta clase tiene tres propósitos:
     1. Encapsular soluciones generadas por cualquier método (RL, Greedy, VNS).
     2. Cargar soluciones de referencia (Best Known Solutions) del NEO Research
        Group desde archivos `.res`.
-    3. Calcular el costo total y validar factibilidad de una solución dada
-       una instancia.
+    3. Calcular el costo total, validar factibilidad y producir resúmenes
+       estadísticos para análisis y reporte en el Capítulo 4 de la memoria.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -49,6 +49,24 @@ class Route:
         """Retorna los IDs de los clientes visitados (excluye los depósitos)."""
         return [n for n in self.nodes if n != 0]
 
+    def load(self, instance: Instance) -> float:
+        """
+        Demanda total transportada en esta ruta.
+
+        Raises:
+            KeyError: si la ruta contiene IDs no presentes en la instancia.
+        """
+        total = 0.0
+        for c_id in self.customers:
+            try:
+                total += instance.get_customer(c_id).demand
+            except KeyError:
+                raise KeyError(
+                    f"Cliente {c_id} en la ruta (día {self.day}, "
+                    f"veh {self.vehicle_id}) no existe en la instancia."
+                ) from None
+        return total
+
     def __repr__(self) -> str:
         return (
             f"Route(day={self.day}, vehicle={self.vehicle_id}, "
@@ -68,7 +86,21 @@ class Solution:
             soluciones generadas por algoritmos.
     """
     routes: List[Route] = field(default_factory=list)
-    reported_cost: float | None = None
+    reported_cost: Optional[float] = None
+
+    # =========================================================================
+    #  Construcción incremental
+    # =========================================================================
+
+    def add_route(self, route: Route) -> None:
+        """
+        Agrega una ruta a la solución.
+
+        Útil para algoritmos constructivos como Greedy o el agente de RL, que
+        construyen la solución paso a paso. No realiza validación inmediata;
+        la factibilidad se verifica con `is_feasible()`.
+        """
+        self.routes.append(route)
 
     # =========================================================================
     #  Cálculo de costo
@@ -103,8 +135,15 @@ class Solution:
         """Calcula el costo de una sola ruta sumando distancias entre nodos consecutivos."""
         cost = 0.0
         for i in range(len(route.nodes) - 1):
-            idx_from = id_to_idx[route.nodes[i]]
-            idx_to = id_to_idx[route.nodes[i + 1]]
+            try:
+                idx_from = id_to_idx[route.nodes[i]]
+                idx_to = id_to_idx[route.nodes[i + 1]]
+            except KeyError as e:
+                raise KeyError(
+                    f"Nodo {e.args[0]} referenciado en la ruta "
+                    f"(día {route.day}, veh {route.vehicle_id}) no existe en "
+                    f"la instancia. La solución es inválida."
+                ) from None
             cost += matrix[idx_from, idx_to]
         return cost
 
@@ -136,29 +175,39 @@ class Solution:
         """
         violations: List[str] = []
 
-        # (a) Depósito al inicio y fin de cada ruta
+        # Construir el conjunto de IDs válidos en la instancia (incluyendo depósito).
+        valid_ids = {0} | {c.id for c in instance.customers}
+
+        # (a) Depósito al inicio y fin de cada ruta + (a') IDs desconocidos
         for r in self.routes:
             if not r.nodes or r.nodes[0] != 0 or r.nodes[-1] != 0:
                 violations.append(
                     f"Ruta (día {r.day}, veh {r.vehicle_id}) no empieza/termina en depósito."
                 )
+            unknown = [n for n in r.nodes if n not in valid_ids]
+            if unknown:
+                violations.append(
+                    f"Ruta (día {r.day}, veh {r.vehicle_id}) contiene IDs "
+                    f"no presentes en la instancia: {unknown}."
+                )
 
-        # (b) Capacidad
+        # (b) Capacidad — saltar rutas con IDs desconocidos para no propagar el KeyError
         for r in self.routes:
-            load = sum(
-                instance.get_customer(c).demand for c in r.customers
-            )
+            if any(c not in valid_ids for c in r.customers):
+                continue
+            load = r.load(instance)
             if load > instance.capacity:
                 violations.append(
                     f"Ruta (día {r.day}, veh {r.vehicle_id}) excede capacidad: "
                     f"{load} > {instance.capacity}."
                 )
 
-        # (c) y (d): construir mapa cliente -> días visitados
-        visits_per_customer: dict[int, List[int]] = {}
+        # (c) y (d): construir mapa cliente -> días visitados (solo IDs válidos)
+        visits_per_customer: Dict[int, List[int]] = {}
         for r in self.routes:
             for c_id in r.customers:
-                visits_per_customer.setdefault(c_id, []).append(r.day)
+                if c_id in valid_ids:
+                    visits_per_customer.setdefault(c_id, []).append(r.day)
 
         for customer in instance.customers:
             visited_days = sorted(visits_per_customer.get(customer.id, []))
@@ -182,12 +231,105 @@ class Solution:
         return (len(violations) == 0, violations)
 
     # =========================================================================
-    #  Utilidades
+    #  Consultas y análisis
     # =========================================================================
 
     def routes_by_day(self, day: int) -> List[Route]:
         """Retorna todas las rutas asociadas al día indicado."""
         return [r for r in self.routes if r.day == day]
+
+    def customer_visit_days(self, customer_id: int) -> Tuple[int, ...]:
+        """
+        Retorna los días en que un cliente es visitado en esta solución.
+
+        Útil para visualización (qué días aparecen las rutas que contienen al
+        cliente) y para identificar el patrón asignado.
+
+        Args:
+            customer_id: ID del cliente consultado.
+
+        Returns:
+            Tupla ordenada de días de visita. Vacía si el cliente no se
+            visita en la solución actual.
+        """
+        days = []
+        for r in self.routes:
+            if customer_id in r.customers:
+                days.append(r.day)
+        return tuple(sorted(days))
+
+    def get_assigned_pattern(
+        self, customer_id: int, instance: Instance
+    ) -> Optional[Tuple[int, ...]]:
+        """
+        Retorna el patrón asignado al cliente en esta solución, si el conjunto
+        de días visitados coincide con alguno de sus patrones permitidos.
+
+        Args:
+            customer_id: ID del cliente.
+            instance: Instancia del PVRP que define los patrones permitidos.
+
+        Returns:
+            La tupla de días asignada (igual a uno de los patrones permitidos),
+            o `None` si los días visitados no corresponden a ningún patrón
+            válido (lo cual indica infactibilidad).
+        """
+        visited = self.customer_visit_days(customer_id)
+        customer = instance.get_customer(customer_id)
+        if visited in customer.allowed_patterns:
+            return visited
+        return None
+
+    def summary(
+        self,
+        instance: Instance,
+        bks_cost: Optional[float] = None,
+    ) -> Dict[str, float]:
+        """
+        Genera un resumen estadístico de la solución.
+
+        Las métricas reportadas son las que se utilizarán en el Capítulo 4 de
+        la memoria para comparar distintos métodos de resolución.
+
+        Args:
+            instance: Instancia del PVRP correspondiente.
+            bks_cost: Costo de la mejor solución conocida (Best Known Solution).
+                Si se provee, se calcula el gap porcentual.
+
+        Returns:
+            Diccionario con las métricas:
+                - total_cost: costo total de la solución.
+                - num_routes: número de rutas (vehículos-día utilizados).
+                - avg_routes_per_day: rutas promedio por día.
+                - avg_load: carga promedio por ruta.
+                - max_load: carga máxima registrada en una ruta.
+                - capacity_utilization: max_load / capacidad (en [0, 1]).
+                - is_feasible: 1.0 si la solución es factible, 0.0 si no.
+                - num_violations: número de violaciones detectadas.
+                - gap_to_bks (opcional): (cost - bks) / bks * 100, en %.
+        """
+        cost = self.total_cost(instance)
+        is_feasible, violations = self.is_feasible(instance)
+
+        loads = [r.load(instance) for r in self.routes]
+        avg_load = float(np.mean(loads)) if loads else 0.0
+        max_load = float(np.max(loads)) if loads else 0.0
+
+        result: Dict[str, float] = {
+            "total_cost": cost,
+            "num_routes": float(len(self.routes)),
+            "avg_routes_per_day": len(self.routes) / instance.horizon,
+            "avg_load": avg_load,
+            "max_load": max_load,
+            "capacity_utilization": max_load / instance.capacity if instance.capacity > 0 else 0.0,
+            "is_feasible": 1.0 if is_feasible else 0.0,
+            "num_violations": float(len(violations)),
+        }
+
+        if bks_cost is not None and bks_cost > 0:
+            result["gap_to_bks"] = (cost - bks_cost) / bks_cost * 100.0
+
+        return result
 
     def __repr__(self) -> str:
         return f"Solution(routes={len(self.routes)}, reported_cost={self.reported_cost})"
