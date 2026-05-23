@@ -117,6 +117,12 @@ class PVRPEnv(gym.Env):
             feasible, _ = self._solution.is_feasible(self.instance)
             reward += terminal_reward(feasible, self.reward_config)
             step_info["is_feasible"] = feasible
+            # Exponer métricas del episodio en info para callbacks de logging.
+            # Se hace AQUÍ (antes del reset automático del VecEnv) para evitar
+            # problemas de timing al consultar el entorno tras la terminación.
+            step_info["episode_cost"] = self._solution.total_cost(self.instance)
+            step_info["episode_num_routes"] = len(self._solution.routes)
+            step_info["episode_feasible"] = 1.0 if feasible else 0.0
 
         obs = self.state_encoder.encode(self._state)
         info = {**self._build_info(), **step_info}
