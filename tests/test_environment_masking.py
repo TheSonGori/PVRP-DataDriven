@@ -198,6 +198,23 @@ class TestTerminalReward:
         assert terminal_reward(True, cfg) == 100.0
         assert terminal_reward(False, cfg) == -500.0
 
+    def test_terminal_penalty_scales_with_missing_visits(self):
+        """La penalización crece con el número de visitas sin realizar,
+        evitando el atajo de terminar episodios triviales (reward hacking)."""
+        from src.environment.reward import RewardConfig, terminal_reward
+        cfg = RewardConfig(
+            terminal_bonus=100.0,
+            infeasibility_penalty=-500.0,
+            per_missing_penalty=-50.0,
+        )
+        # Sin faltantes: solo la penalización base.
+        assert terminal_reward(False, cfg, num_missing_visits=0) == -500.0
+        # Con faltantes: base + proporcional.
+        assert terminal_reward(False, cfg, num_missing_visits=10) == -1000.0
+        assert terminal_reward(False, cfg, num_missing_visits=49) == -2950.0
+        # Si es factible, el número de faltantes (0) no afecta el bonus.
+        assert terminal_reward(True, cfg, num_missing_visits=0) == 100.0
+
     def test_terminal_reward_reflected_in_last_step(self):
         """
         El último step de un episodio debe incluir el componente terminal:

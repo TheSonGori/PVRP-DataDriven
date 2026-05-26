@@ -46,6 +46,86 @@ def build_env(instance: Instance, seed: int = 0) -> ActionMasker:
     return env
 
 
+def build_multi_env(instances, selection: str = "cyclic", seed: int = 0):
+    """
+    Construye un entorno multi-instancia envuelto en ActionMasker.
+
+    Args:
+        instances: Lista de instancias compatibles (mismo número de clientes).
+        selection: "cyclic" o "random" (cómo rotar entre instancias).
+        seed: Semilla para reproducibilidad.
+
+    Returns:
+        Un entorno listo para `MaskablePPO.learn(...)`.
+    """
+    # Import local para evitar dependencia circular al cargar el módulo.
+    from src.environment.multi_instance_env import MultiInstancePVRPEnv
+
+    env = MultiInstancePVRPEnv(instances, selection=selection, seed=seed)
+    env = ActionMasker(env, _mask_fn)
+    return env
+
+
+def train_agent_multi(
+    instances,
+    config: PPOConfig,
+    selection: str = "cyclic",
+    save_path: Optional[Path] = None,
+    tensorboard_log: Optional[Path] = None,
+) -> MaskablePPO:
+    """
+    Entrena un agente MaskablePPO rotando entre varias instancias.
+
+    Idéntico a `train_agent` pero usando `MultiInstancePVRPEnv`. El agente ve
+    una instancia distinta en cada episodio, forzándolo a aprender una política
+    general en lugar de memorizar una sola instancia.
+
+    Args:
+        instances: Lista de instancias compatibles.
+        config: Hiperparámetros (`PPOConfig`).
+        selection: "cyclic" o "random".
+        save_path: Ruta opcional para guardar el modelo.
+        tensorboard_log: Ruta opcional para logs de TensorBoard.
+
+    Returns:
+        Modelo entrenado.
+    """
+    env = build_multi_env(instances, selection=selection, seed=config.seed)
+
+    model = MaskablePPO(
+        policy="MlpPolicy",
+        env=env,
+        learning_rate=config.learning_rate,
+        n_steps=config.n_steps,
+        batch_size=config.batch_size,
+        n_epochs=config.n_epochs,
+        gamma=config.gamma,
+        gae_lambda=config.gae_lambda,
+        clip_range=config.clip_range,
+        ent_coef=config.ent_coef,
+        policy_kwargs=config.policy_kwargs,
+        verbose=config.verbose,
+        seed=config.seed,
+        tensorboard_log=str(tensorboard_log) if tensorboard_log else None,
+    )
+
+    callbacks = [PVRPMetricsCallback(verbose=0)]
+    callback = CallbackList(callbacks)
+
+    model.learn(
+        total_timesteps=config.total_timesteps,
+        callback=callback,
+        progress_bar=False,
+    )
+
+    if save_path is not None:
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        model.save(str(save_path))
+
+    return model
+
+
 def train_agent(
     instance: Instance,
     config: PPOConfig,

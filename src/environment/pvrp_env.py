@@ -115,7 +115,10 @@ class PVRPEnv(gym.Env):
         if terminated:
             self._finalize_open_route()
             feasible, _ = self._solution.is_feasible(self.instance)
-            reward += terminal_reward(feasible, self.reward_config)
+            num_missing = self._count_missing_visits()
+            reward += terminal_reward(
+                feasible, self.reward_config, num_missing_visits=num_missing
+            )
             step_info["is_feasible"] = feasible
             # Exponer métricas del episodio en info para callbacks de logging.
             # Se hace AQUÍ (antes del reset automático del VecEnv) para evitar
@@ -213,6 +216,22 @@ class PVRPEnv(gym.Env):
             if len(self._state.visits_completed[c.id]) < c.frequency:
                 return False
         return True
+
+    def _count_missing_visits(self) -> int:
+        """
+        Cuenta el número total de visitas de clientes que quedaron sin
+        realizar al terminar el episodio.
+
+        Para cada cliente, las visitas faltantes son
+        `frequency - visitas_realizadas` (mínimo 0). La suma sobre todos los
+        clientes mide cuán incompleta quedó la solución, y alimenta la
+        penalización proporcional de la recompensa terminal.
+        """
+        missing = 0
+        for c in self.instance.customers:
+            done = len(self._state.visits_completed[c.id])
+            missing += max(c.frequency - done, 0)
+        return missing
 
     def _build_info(self) -> Dict[str, Any]:
         return {

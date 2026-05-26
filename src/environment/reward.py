@@ -40,12 +40,16 @@ class RewardConfig:
         terminal_bonus: Bonus aplicado al cerrar un episodio con solución
             factible. Debe ser positivo y grande respecto al costo típico
             para incentivar la completitud.
-        infeasibility_penalty: Penalización aplicada si el episodio termina
-            con visitas incompletas. Debe ser negativa y de magnitud
-            considerable.
+        infeasibility_penalty: Penalización BASE aplicada si el episodio
+            termina con visitas incompletas. Debe ser negativa.
+        per_missing_penalty: Penalización ADICIONAL por cada visita de cliente
+            que quedó sin realizar. Hace que abandonar clientes sea cada vez
+            más caro, evitando que el agente explote el atajo de "visitar
+            pocos clientes y cerrar" (reward hacking). Debe ser negativa.
     """
     terminal_bonus: float = 100.0
     infeasibility_penalty: float = -500.0
+    per_missing_penalty: float = -50.0
 
 
 DEFAULT_REWARD_CONFIG = RewardConfig()
@@ -56,6 +60,27 @@ def distance_reward(distance: float) -> float:
     return -float(distance)
 
 
-def terminal_reward(is_feasible: bool, config: RewardConfig = DEFAULT_REWARD_CONFIG) -> float:
-    """Componente de recompensa aplicado al final del episodio."""
-    return config.terminal_bonus if is_feasible else config.infeasibility_penalty
+def terminal_reward(
+    is_feasible: bool,
+    config: RewardConfig = DEFAULT_REWARD_CONFIG,
+    num_missing_visits: int = 0,
+) -> float:
+    """
+    Componente de recompensa aplicado al final del episodio.
+
+    Args:
+        is_feasible: Si la solución final es factible.
+        config: Configuración de recompensa.
+        num_missing_visits: Número de visitas de clientes que quedaron sin
+            realizar. Cada una añade `per_missing_penalty` a la penalización,
+            de modo que abandonar muchos clientes es mucho peor que abandonar
+            pocos. Esto elimina el incentivo perverso a terminar episodios
+            triviales (visitar 1 cliente y cerrar).
+
+    Returns:
+        El bonus si es factible; en caso contrario, la penalización base más
+        la penalización proporcional a las visitas faltantes.
+    """
+    if is_feasible:
+        return config.terminal_bonus
+    return config.infeasibility_penalty + config.per_missing_penalty * num_missing_visits
