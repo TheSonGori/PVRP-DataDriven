@@ -1,12 +1,13 @@
 """
-Evaluación cruzada (cero-shot) y del agente multi-instancia.
+Evaluación cruzada (cero-shot) y multi-instancia: carga modelos ya
+entrenados y los evalúa en instancias distintas a las de su entrenamiento,
+además de evaluar el agente multi-instancia sobre las tres instancias base
+(uso: `python scripts/evaluate_cross.py`).
 
-Carga modelos ya entrenados y los evalúa en instancias que no fueron
-las usadas para su entrenamiento (transferencia directa). También
-evalúa el agente multi-instancia (ppo_multi_p01_p02_p03) sobre las
-tres instancias base.
-
-    python scripts/evaluate_cross.py
+Entrada: modelos .zip en results/models/ (ppo_p01, ppo_p03_seed0,
+ppo_multi_p01_p02_p03) e instancias en data/raw/.
+Salida: tabla impresa en consola con costo, gap y factibilidad de cada par
+modelo/instancia evaluado.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ DATA_DIR = PROJECT_ROOT / "data" / "raw"
 MODELS_DIR = PROJECT_ROOT / "results" / "models"
 
 
+# Costo de la BKS de una instancia, o None si no hay .res disponible.
 def _bks(name: str):
     p = DATA_DIR / f"{name}.res"
     if p.exists():
@@ -37,8 +39,8 @@ def _bks(name: str):
     return None
 
 
+# Ejecuta el agente (determinístico) sobre la instancia y devuelve costo, gap y factibilidad.
 def evaluate(model, instance, seed=42):
-    """Ejecuta el agente sobre la instancia y devuelve costo, gap, factibilidad."""
     env = build_env(instance, seed=seed)
     obs, _ = env.reset()
     terminated = False
@@ -57,12 +59,11 @@ def evaluate(model, instance, seed=42):
 
 
 def main():
-    # Pares (modelo, instancia_evaluación) para cero-shot
     cross_pairs = [
-        ("ppo_p01", "p01"),  # baseline: agente en su propia instancia
+        ("ppo_p01", "p01"),
         ("ppo_p01", "p02"),
         ("ppo_p01", "p03"),
-        ("ppo_p03_seed0", "p03"),  # baseline p03
+        ("ppo_p03_seed0", "p03"),
         ("ppo_p03_seed0", "p01"),
         ("ppo_p03_seed0", "p02"),
     ]

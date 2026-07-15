@@ -1,13 +1,13 @@
 """
-Script de análisis multi-semilla (Día 14, Fase E).
+CLI de análisis multi-semilla: entrena el agente N veces con semillas
+distintas sobre una instancia y reporta media ± desviación del gap (uso:
+`python scripts/multi_seed.py --instance p01 --seeds 0 1 2 3 4 --timesteps
+300000 --save-models`; con 5 semillas y 300k pasos toma ~47 min en CPU).
 
-Entrena el agente N veces con semillas distintas sobre una instancia y
-reporta media ± desviación del gap. Opcionalmente guarda cada modelo.
-
-    python scripts/multi_seed.py --instance p01 --seeds 0 1 2 3 4 \
-        --timesteps 300000 --save-models
-
-Con 5 semillas y 300k pasos toma aprox. 47 minutos en CPU.
+Entrada: argumentos --instance, --seeds, --timesteps, --ent-coef,
+--net-arch, --save-models.
+Salida: resumen impreso en consola (run_multi_seed + print_multi_seed); si
+--save-models, guarda cada modelo en results/models/. Código de salida 0.
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ from src.data.solution_loader import load_solution
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 
+# Costo de la BKS de una instancia, o None si no hay .res disponible.
 def _bks(name: str):
     p = DATA_DIR / f"{name}.res"
     if p.exists():
@@ -57,7 +58,7 @@ def main() -> int:
         total_timesteps=args.timesteps,
         ent_coef=args.ent_coef,
         policy_kwargs={"net_arch": list(args.net_arch)},
-        verbose=0,  # silenciamos el log de PPO; mostramos nuestro propio resumen
+        verbose=0,
     )
 
     models_dir = (PROJECT_ROOT / "results" / "models") if args.save_models else None

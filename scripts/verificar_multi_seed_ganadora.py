@@ -1,16 +1,16 @@
 """
-Verificación multi-semilla de la configuración ganadora del barrido
-de calibración sobre p04.
+Verifica bajo análisis multi-semilla si la configuración ganadora del
+barrido de calibración sobre p04 ([256,256] + ent_coef=0.01, mejor gap con
+seed=0: +24.7%) sostiene esa ventaja frente a la configuración adoptada
+([512,512] + ent_coef=0.05), o si fue un artefacto de esa semilla en
+particular. Corre las semillas 1-4 (uso:
+`python scripts/verificar_multi_seed_ganadora.py`; ~60 min).
 
-El barrido con seed=0 identificó a [256, 256] + ent_coef=0.01 como
-la configuración con mejor gap (+24.7%). Este script corre las 4
-semillas restantes (1, 2, 3, 4) para determinar si esa diferencia
-respecto a la configuración adoptada se sostiene bajo análisis
-multi-semilla, o si es un artefacto de la seed=0.
-
-    python scripts/verificar_multi_seed_ganadora.py
-
-Tiempo estimado: ~60 minutos (4 entrenamientos de ~15 min cada uno).
+Entrada: ninguna (usa la instancia p04 fija, la configuración candidata
+[256,256]/ent_coef=0.01, y el resultado ya conocido de seed=0).
+Salida: tabla por semilla y estadísticas agregadas (gap medio/std, tasa de
+factibilidad) comparadas contra la configuración adoptada; todo impreso en
+consola.
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ from src.environment.pvrp_env import PVRPEnv
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 
+# Costo de la BKS de una instancia, o None si no hay .res disponible.
 def _bks(name: str):
     p = DATA_DIR / f"{name}.res"
     if p.exists():
@@ -47,12 +48,14 @@ def _bks(name: str):
     return None
 
 
+# Construye el entorno con la RewardConfig por defecto.
 def _build_env(instance, seed=0):
     env = PVRPEnv(instance, seed=seed)
     env = ActionMasker(env, _mask_fn)
     return env
 
 
+# Replica la lógica de train_agent() sin depender de él.
 def _train_with_config(instance, ppo_config):
     env = _build_env(instance, seed=ppo_config.seed)
     model = MaskablePPO(
@@ -78,13 +81,12 @@ def main():
     instance = load_instance(DATA_DIR / "p04.txt")
     bks = _bks("p04")
 
-    # Configuración a verificar: la ganadora del barrido
     net_arch = [256, 256]
     ent_coef = 0.01
 
-    # seed=0 ya la tenemos del barrido: 1041.60, +24.7%
     seeds_a_correr = [1, 2, 3, 4]
 
+    # Resultado de seed=0 ya obtenido en el barrido de calibración.
     resultado_seed_0 = {
         "seed": 0,
         "cost": 1041.60,
@@ -135,7 +137,6 @@ def main():
             "num_routes": ev.num_routes,
         })
 
-    # Resumen final
     print(f"\n{'='*76}")
     print(f"  RESUMEN MULTI-SEMILLA — [256,256] + ent_coef=0.01 sobre p04")
     print(f"  Tiempo total: {tiempo_total/60:.1f} min")
@@ -152,7 +153,6 @@ def main():
 
     print(f"  {'-'*66}")
 
-    # Estadísticas
     if len(factibles) >= 2:
         gaps = [r["gap"] for r in factibles]
         costs = [r["cost"] for r in factibles]
@@ -166,7 +166,6 @@ def main():
         print(f"  Gap mínimo:  {min(gaps):+.1f}%   Gap máximo: {max(gaps):+.1f}%")
         print(f"  Costo medio: {cost_mean:.2f} ± {cost_std:.2f}")
 
-    # Comparación con la adoptada
     print(f"\n{'-'*76}")
     print(f"  COMPARACIÓN CON LA CONFIGURACIÓN ADOPTADA")
     print(f"{'-'*76}")

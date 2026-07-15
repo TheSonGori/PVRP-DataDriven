@@ -1,13 +1,13 @@
 """
-Script de visualización de rutas (Día 15, Fase E).
+CLI de visualización de rutas: carga un agente entrenado, resuelve una
+instancia y dibuja sus rutas; opcionalmente dibuja también la BKS para
+comparación visual (uso: `python scripts/plot_routes.py --instance p01
+--model results/models/ppo_p01 --compare-bks`).
 
-Carga un agente entrenado, resuelve una instancia y dibuja sus rutas.
-Opcionalmente dibuja también la BKS para comparación visual.
-
-    python scripts/plot_routes.py --instance p01 \
-        --model results/models/ppo_p01 --compare-bks
-
-Genera archivos PNG en results/figures/.
+Entrada: argumentos --instance, --model (ruta al .zip sin extensión) y
+--compare-bks.
+Salida: archivos PNG en results/figures/ (rutas_<instance>_RL.png y,
+si se pide, rutas_<instance>_BKS.png). Código de salida 0/1.
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ DATA_DIR = PROJECT_ROOT / "data" / "raw"
 FIG_DIR = PROJECT_ROOT / "results" / "figures"
 
 
+# Ejecuta el agente sobre la instancia y devuelve la solución construida.
 def _solve_with_agent(model, instance, seed: int = 42):
-    """Ejecuta el agente y devuelve la solución construida."""
     env = build_env(instance, seed=seed)
     obs, _ = env.reset()
     terminated = False
@@ -57,7 +57,6 @@ def main() -> int:
 
     instance = load_instance(DATA_DIR / f"{args.instance}.txt")
 
-    # --- Solución del agente RL ---
     model_path = PROJECT_ROOT / args.model
     if not Path(str(model_path) + ".zip").exists():
         print(f"ERROR: no existe el modelo {model_path}.zip")
@@ -75,7 +74,6 @@ def main() -> int:
     )
     print(f"Figura RL guardada: {out_rl}")
 
-    # --- BKS opcional ---
     if args.compare_bks:
         bks_path = DATA_DIR / f"{args.instance}.res"
         if bks_path.exists():

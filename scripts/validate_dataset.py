@@ -1,22 +1,19 @@
 """
-Validación masiva del dataset PVRP del NEO Research Group.
-
-Este script:
-
-    1. Recorre todas las instancias `.txt` en `data/raw/`.
-    2. Verifica que cada una se cargue sin errores.
-    3. Si existe el `.res` correspondiente, valida:
-        - Que la solución se cargue correctamente.
-        - Que el costo recalculado coincida con el reportado.
-        - Que la solución sea factible (cumpla todas las restricciones del PVRP).
-    4. Imprime una tabla resumen del dataset (útil para el Capítulo 4 de la memoria).
-    5. Reporta cualquier inconsistencia detectada.
+Valida masivamente el dataset PVRP del NEO Research Group: recorre todas
+las instancias .txt en data/raw/, verifica que carguen sin errores y, si
+existe el .res correspondiente, que la solución cargue, que su costo
+recalculado coincida con el reportado y que sea factible. Imprime una
+tabla resumen y, opcionalmente, la exporta a CSV.
 
 Uso:
-
     python scripts/validate_dataset.py
-    python scripts/validate_dataset.py --tolerance 1.0    # tolerancia más permisiva
+    python scripts/validate_dataset.py --tolerance 1.0
     python scripts/validate_dataset.py --export-csv results/dataset_summary.csv
+
+Entrada: instancias .txt/.res en data/raw/, argumentos --tolerance y
+--export-csv.
+Salida: tabla resumen y detalle de fallas impresos en consola; CSV opcional
+en la ruta indicada; código de salida 0 si no hay fallas críticas, 1 si sí.
 """
 
 from __future__ import annotations
@@ -28,7 +25,6 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-# Permite ejecutar el script directamente desde cualquier ubicación.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -39,28 +35,16 @@ from src.data.solution_loader import load_solution
 from src.utils.solution import Solution
 
 
-# =============================================================================
-#  Configuración
-# =============================================================================
-
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 
 
-# Instancias con inconsistencias conocidas en su archivo .res:
-# `p11.res` referencia al cliente 139, que no aparece en `p11.txt` (declara 138
-# clientes con IDs 1-138). Esto parece ser un bug histórico del dataset publicado
-# por el NEO Research Group. La instancia en sí es válida y puede usarse para
-# entrenar/evaluar el agente, pero el BKS reportado no es reconciliable
-# directamente con la representación del modelo.
+# p11.res referencia al cliente 139, inexistente en p11.txt (declara IDs 1-138);
+# es un bug conocido del dataset publicado, no de este código, así que se excluye del gap.
 INSTANCES_WITH_KNOWN_BKS_ISSUES = {"p11"}
 
 
-# =============================================================================
-#  Resultado de validación por instancia
-# =============================================================================
-
+# Resultado de validar una instancia y, si existe, su solución de referencia.
 class ValidationResult:
-    """Encapsula el resultado de validar una instancia y su solución."""
 
     def __init__(self, name: str):
         self.name = name
@@ -78,13 +62,11 @@ class ValidationResult:
         self.num_violations: int = 0
         self.first_violations: List[str] = []
 
-        # True si esta instancia está en la lista de BKS con problemas conocidos
-        # del dataset original (no es un fallo de nuestro código).
         self.has_known_bks_issue: bool = name in INSTANCES_WITH_KNOWN_BKS_ISSUES
 
+    # True si la validación fue completamente exitosa.
     @property
     def passes(self) -> bool:
-        """True si la validación es completamente exitosa."""
         if not self.instance_loaded:
             return False
         if self.has_res and not self.has_known_bks_issue:
@@ -96,15 +78,10 @@ class ValidationResult:
         return True
 
 
-# =============================================================================
-#  Lógica de validación
-# =============================================================================
-
+# Carga y valida una instancia y, si existe, su solución .res.
 def validate_one(name: str, tolerance: float) -> ValidationResult:
-    """Carga y valida una instancia y, si existe, su solución `.res`."""
     result = ValidationResult(name)
 
-    # --- 1. Cargar instancia ---
     instance_path = DATA_DIR / f"{name}.txt"
     try:
         result.instance = load_instance(instance_path)
@@ -113,14 +90,12 @@ def validate_one(name: str, tolerance: float) -> ValidationResult:
         result.instance_error = f"{type(e).__name__}: {e}"
         return result
 
-    # --- 2. Si hay .res, cargar y validar solución ---
     res_path = DATA_DIR / f"{name}.res"
     if not res_path.exists():
         return result
 
     result.has_res = True
 
-    # Etapa A: cargar el archivo .res
     try:
         solution = load_solution(res_path)
         result.solution_loaded = True
@@ -129,10 +104,6 @@ def validate_one(name: str, tolerance: float) -> ValidationResult:
         result.solution_error = f"al cargar .res: {type(e).__name__}: {e}"
         return result
 
-    # Etapa B: validar la solución contra la instancia.
-    # Para instancias con problemas conocidos del BKS solo registramos las
-    # violaciones de factibilidad sin intentar calcular total_cost (porque
-    # contiene IDs inexistentes que harían fallar el cálculo).
     if result.has_known_bks_issue:
         feasible, violations = solution.is_feasible(result.instance)
         result.is_feasible = feasible
@@ -155,22 +126,8 @@ def validate_one(name: str, tolerance: float) -> ValidationResult:
     return result
 
 
+# Lista los nombres (sin extensión) de las instancias p##/pr## en data/raw/.
 def discover_instances() -> List[str]:
-    """
-    Lista los nombres de las instancias `.txt` en data/raw/.
-
-    Solo considera archivos cuyo nombre coincide con el patrón de las
-    instancias del NEO Research Group:
-
-        - "p"  seguido de uno o más dígitos    (p01, p02, ..., p32)
-        - "pr" seguido de uno o más dígitos    (pr01, pr02, ..., pr10)
-
-    Esto evita falsos positivos con archivos como `readme.txt` o cualquier
-    otro `.txt` no relacionado que pueda estar en el directorio.
-
-    Returns:
-        Lista ordenada de nombres (sin extensión).
-    """
     pattern = re.compile(r"^pr?\d+$", re.IGNORECASE)
     return sorted(
         p.stem for p in DATA_DIR.glob("*.txt")
@@ -178,19 +135,15 @@ def discover_instances() -> List[str]:
     )
 
 
-# =============================================================================
-#  Presentación de resultados
-# =============================================================================
-
+# Formatea un valor numérico opcional, mostrando "--" si es None.
 def _fmt(value: Optional[float], width: int = 10, precision: int = 2) -> str:
-    """Formatea un valor numérico con None tolerante."""
     if value is None:
         return f"{'--':>{width}}"
     return f"{value:>{width}.{precision}f}"
 
 
+# Imprime la tabla resumen de instancias y su estado de validación.
 def print_summary_table(results: List[ValidationResult]) -> None:
-    """Imprime una tabla resumen de las instancias y validaciones."""
     print()
     print("=" * 105)
     print(
@@ -214,7 +167,6 @@ def print_summary_table(results: List[ValidationResult]) -> None:
             print(f"{base} {'--':>10} {'--':>10} {'--':>8} {'--':>7} {'NO_RES':>8}")
             continue
 
-        # A partir de aquí: tiene .res, pero puede haber fallado parcialmente.
         bks_str = _fmt(r.reported_cost)
         rec_str = _fmt(r.recalculated_cost)
         diff_str = _fmt(r.cost_diff, width=8, precision=4)
@@ -242,8 +194,8 @@ def print_summary_table(results: List[ValidationResult]) -> None:
     print("=" * 105)
 
 
+# Imprime el detalle de las instancias que fallaron alguna validación, agrupadas por tipo de falla.
 def print_failures(results: List[ValidationResult], tolerance: float) -> None:
-    """Imprime detalles de las instancias que fallaron alguna validación."""
     instance_fails = []
     res_load_fails = []
     validation_fails = []
@@ -321,8 +273,8 @@ def print_failures(results: List[ValidationResult], tolerance: float) -> None:
     print()
 
 
+# Exporta la tabla resumen a CSV.
 def export_csv(results: List[ValidationResult], output_path: Path) -> None:
-    """Exporta la tabla resumen a CSV para incluirla en la memoria (Capítulo 4)."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with output_path.open("w", newline="", encoding="utf-8") as f:
@@ -352,10 +304,6 @@ def export_csv(results: List[ValidationResult], output_path: Path) -> None:
 
     print(f"✓ Tabla exportada a {output_path}")
 
-
-# =============================================================================
-#  CLI
-# =============================================================================
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -389,8 +337,6 @@ def main() -> int:
     if args.export_csv:
         export_csv(results, args.export_csv)
 
-    # Código de retorno: 0 si todo OK, 1 si hay fallas críticas
-    # (instancias con problemas conocidos del BKS NO cuentan como fallas).
     critical_failures = sum(
         1 for r in results
         if not r.instance_loaded

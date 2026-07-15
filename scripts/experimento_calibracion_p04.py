@@ -1,21 +1,16 @@
 """
-Barrido de hiperparámetros sobre p04 para evaluar si la configuración
-óptima cambia respecto a la calibrada sobre p01.
+Barrido de hiperparámetros (grid 3x3 de arquitectura de red × ent_coef)
+sobre p04, para verificar si la configuración adoptada ([512,512] +
+ent_coef=0.05, calibrada sobre p01) sigue siendo óptima en una instancia
+distinta o si es idiosincrática de p01 (uso:
+`python scripts/experimento_calibracion_p04.py`; ~3 horas, 9 corridas de
+500k pasos cada una).
 
-Diseño: grid de 3x3 sobre los dos hiperparámetros más sensibles del
-método (arquitectura de red y coeficiente de entropía), manteniendo
-el resto de los parámetros de PPO en sus valores por defecto para
-que la comparación sea justa. Los demás hiperparámetros son los
-mismos que se usaron en la calibración original sobre p01.
-
-Objetivo: responder empíricamente si la configuración adoptada
-([512, 512] + ent_coef=0.05) sigue siendo óptima cuando se toma p04
-como instancia de referencia, o si un evaluador podría objetar que
-la configuración es idiosincrática de p01.
-
-    python scripts/experimento_calibracion_p04.py
-
-Tiempo estimado: ~3 horas (9 corridas de 500k pasos cada una).
+Entrada: ninguna (usa la instancia p04 fija y el grid net_archs × ent_coefs
+definido en main()).
+Salida: tabla de resultados (costo, gap, factibilidad, rutas, tiempo) por
+configuración, ordenada por gap, más una interpretación comparada con la
+configuración adoptada; todo impreso en consola.
 """
 
 from __future__ import annotations
@@ -43,6 +38,7 @@ from src.environment.reward import RewardConfig
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 
+# Costo de la BKS de una instancia, o None si no hay .res disponible.
 def _bks(name: str):
     p = DATA_DIR / f"{name}.res"
     if p.exists():
@@ -53,15 +49,15 @@ def _bks(name: str):
     return None
 
 
+# Construye el entorno con la RewardConfig por defecto.
 def _build_env(instance, seed=0):
-    """Construye el entorno con la RewardConfig por defecto de la memoria."""
     env = PVRPEnv(instance, seed=seed)
     env = ActionMasker(env, _mask_fn)
     return env
 
 
+# Replica la lógica de train_agent() sin depender de él.
 def _train_with_config(instance, ppo_config):
-    """Replica la lógica de train_agent sin depender de él."""
     env = _build_env(instance, seed=ppo_config.seed)
     model = MaskablePPO(
         policy="MlpPolicy",
@@ -86,20 +82,19 @@ def main():
     instance = load_instance(DATA_DIR / "p04.txt")
     bks = _bks("p04")
 
-    # Grid de configuraciones a evaluar
     net_archs = [[256, 256], [512, 512], [768, 768]]
     ent_coefs = [0.01, 0.05, 0.1]
 
     combinaciones = list(product(net_archs, ent_coefs))
     total = len(combinaciones)
 
-    # Estimación de tiempo por configuración según el tamaño de la red
+    # Minutos estimados según el tamaño de la red.
     def _estimar_min(net):
         if net == [256, 256]:
             return 15
         if net == [512, 512]:
             return 20
-        return 25  # [768, 768]
+        return 25
 
     tiempo_estimado = sum(_estimar_min(n) for n, _ in combinaciones)
     print(f"\n{'='*80}")
@@ -148,7 +143,6 @@ def main():
             "time_min": elapsed / 60,
         })
 
-    # Resumen final ordenado por gap (mejor primero, entre las factibles)
     print(f"\n{'='*80}")
     print(f"  RESUMEN DEL BARRIDO — p04, semilla 0, 500k pasos")
     print(f"  Tiempo total: {tiempo_total/60:.1f} min ({tiempo_total/3600:.2f} h)")
@@ -171,7 +165,6 @@ def main():
         print(f"  {etiqueta:<32} {r['cost']:>10.2f} "
               f"{gap:>10} {feas:>10} {r['num_routes']:>7} {r['time_min']:>7.1f}m{marker}")
 
-    # Comparación explícita con la configuración adoptada
     print(f"\n{'-'*80}")
     print(f"  INTERPRETACIÓN")
     print(f"{'-'*80}")

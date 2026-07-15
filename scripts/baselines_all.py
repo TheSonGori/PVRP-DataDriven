@@ -1,13 +1,12 @@
 """
-Evaluación de baselines (Greedy y VNS) sobre varias instancias (Fase E).
+CLI que evalúa Greedy y VNS sobre varias instancias y las compara contra la
+BKS, para producir una tabla homogénea de baselines (uso:
+`python scripts/baselines_all.py --instances p01 p02 p03 --vns-iters 100`).
 
-Complementa el análisis multi-semilla del agente RL: produce los costos de
-los métodos de referencia sobre las mismas instancias, de modo que la tabla
-consolidada del Capítulo 4 sea homogénea y comparable.
-
-    python scripts/baselines_all.py --instances p01 p02 p03 --vns-iters 100
-
-A diferencia del RL, estos métodos no entrenan: corren en segundos.
+Entrada: argumentos --instances (nombres de instancia en data/raw/) y
+--vns-iters (iteraciones del VNS).
+Salida: tabla impresa en consola con costo, BKS, gap, tiempo y factibilidad
+de cada método por instancia; código de salida 0.
 """
 
 from __future__ import annotations
@@ -28,6 +27,7 @@ from src.data.solution_loader import load_solution
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 
+# Costo de la BKS de una instancia, o None si no hay .res disponible.
 def _bks(name: str):
     p = DATA_DIR / f"{name}.res"
     if p.exists():

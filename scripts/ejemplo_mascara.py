@@ -1,17 +1,14 @@
 """
-Extrae un ejemplo real de máscara de acciones durante la ejecución
-del agente ppo_p01 sobre la instancia p01.
+Extrae un ejemplo real de máscara de acciones de una corrida del agente
+ppo_p01 sobre la instancia p01: avanza el episodio unos pasos hasta un
+estado con clientes ya visitados y capacidad parcialmente consumida, y
+detalla el estado y la máscara resultante (uso:
+`python scripts/ejemplo_mascara.py`).
 
-Objetivo: reemplazar la figura genérica de enmascaramiento del
-Capítulo 3 por un caso concreto extraído de una corrida real, para
-mayor rigor y transparencia.
-
-El script arranca un episodio, avanza algunos pasos hasta llegar a un
-estado interesante (donde ya hay clientes visitados y capacidad
-parcialmente consumida), y luego imprime el detalle completo del
-estado y la máscara en ese momento.
-
-    python scripts/ejemplo_mascara.py
+Entrada: ninguna (usa la instancia p01 y el modelo results/models/ppo_p01
+fijos).
+Salida: detalle del estado, la máscara de acciones y un resumen impresos
+en consola.
 """
 
 from __future__ import annotations
@@ -31,19 +28,14 @@ DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 
 def main():
-    # Cargar instancia p01 y agente entrenado
     instance = load_instance(DATA_DIR / "p01.txt")
     model = MaskablePPO.load("results/models/ppo_p01")
 
-    # Construir entorno y arrancar episodio
     env = build_env(instance, seed=42)
     obs, _ = env.reset()
     underlying = env.unwrapped
 
-    # Avanzar algunos pasos para llegar a un estado interesante:
-    # queremos un estado donde ya haya al menos 3-4 clientes visitados
-    # y capacidad residual parcialmente consumida.
-    target_step = 6  # ajustable si el ejemplo no es lo suficientemente ilustrativo
+    target_step = 6
 
     print(f"\n{'='*76}")
     print(f"  EJEMPLO REAL DE ENMASCARAMIENTO — instancia p01, seed=42")
@@ -58,7 +50,6 @@ def main():
               f" vehículo={underlying._state.current_vehicle},"
               f" capacidad residual={underlying._state.remaining_capacity:.0f})")
 
-    # Ahora obtener la máscara real en este paso
     print(f"\n{'-'*76}")
     print(f"  ESTADO EN EL PASO {target_step + 1}")
     print(f"{'-'*76}")
@@ -71,7 +62,6 @@ def main():
           f"{sorted([c for c in range(1, instance.num_customers + 1) if state.current_day in state.visits_completed.get(c, [])])[:10]}"
           f"...")
 
-    # Obtener la máscara actual
     mask = env.action_masks()
 
     print(f"\n{'-'*76}")
@@ -80,11 +70,9 @@ def main():
     print(f"  Acción | Válida | Descripción")
     print(f"  {'-'*70}")
 
-    # Acción 0: cerrar ruta
     valid = "sí" if mask[0] else "NO"
     print(f"    0    |   {valid:<3}  | Cerrar ruta (retornar al depósito)")
 
-    # Acciones 1..N: visitar cliente c
     for c_id in range(1, instance.num_customers + 1):
         valid = "sí" if mask[c_id] else "NO"
         customer = instance.get_customer(c_id)
@@ -92,7 +80,6 @@ def main():
         exceeds_capacity = customer.demand > state.remaining_capacity
         pattern_done = len(state.visits_completed.get(c_id, [])) >= customer.frequency
 
-        # Motivo del bloqueo
         motivo = "cliente disponible"
         if not mask[c_id]:
             reasons = []
@@ -104,7 +91,6 @@ def main():
                 reasons.append(f"cuota cumplida ({customer.frequency} visitas)")
             motivo = ", ".join(reasons) if reasons else "desconocido"
 
-        # Solo imprimir los primeros 10 clientes y unos pocos ejemplos de bloqueados
         if c_id <= 10 or not mask[c_id]:
             print(f"    {c_id:<4} |   {valid:<3}  | {motivo}")
 
@@ -117,7 +103,6 @@ def main():
     print(f"  Total de acciones válidas:   {num_valid} de {len(mask)}")
     print(f"  Total de acciones bloqueadas: {num_invalid}")
 
-    # Sugerencia de ejemplo compacto para la figura
     print(f"\n{'='*76}")
     print(f"  SUGERENCIA PARA FIGURA DE LA MEMORIA")
     print(f"{'='*76}")

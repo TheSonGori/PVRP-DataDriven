@@ -1,21 +1,15 @@
 """
-Replicación del experimento de reward hacking en la instancia p04
-(75 clientes, familia A, configuración escalada).
+Replica el experimento de reward hacking sobre p04 (75 clientes, config
+escalada [512,512] + 500k pasos) para verificar si el colapso a soluciones
+triviales observado en p01 con penalización base reducida y lambda=0
+también ocurre en instancias más grandes (uso:
+`python scripts/experimento_lambda_p04.py`; ~60 min, 3 entrenamientos de
+~20 min).
 
-Objetivo: verificar si el fenómeno demostrado en p01 (colapso a
-soluciones triviales con lambda=0 bajo penalización base reducida)
-se replica en instancias de mayor tamaño, respondiendo al comentario
-de la profesora.
-
-Corre 3 configuraciones sobre p04:
-    1. penalización base -500, lambda=0 (baseline: factible por dominancia)
-    2. penalización base -50, lambda=0 (predicción: colapso)
-    3. penalización base -50, lambda=-50 (predicción: rescate)
-
-    python scripts/experimento_lambda_p04.py
-
-Tiempo estimado: ~60 minutos (3 entrenamientos de ~20 min cada uno
-con la configuración escalada [512,512] + 500k pasos).
+Entrada: ninguna (usa la instancia p04 fija y 3 combinaciones predefinidas
+de infeasibility_penalty / per_missing_penalty).
+Salida: tabla comparativa (costo, gap, factibilidad, rutas) impresa en
+consola para cada configuración.
 """
 
 from __future__ import annotations
@@ -42,6 +36,7 @@ from src.environment.reward import RewardConfig
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 
+# Costo de la BKS de una instancia, o None si no hay .res disponible.
 def _bks(name: str):
     p = DATA_DIR / f"{name}.res"
     if p.exists():
@@ -52,12 +47,14 @@ def _bks(name: str):
     return None
 
 
+# Construye el entorno PVRP con un reward_config custom.
 def _build_env_with_reward(instance, reward_config, seed=0):
     env = PVRPEnv(instance, reward_config=reward_config, seed=seed)
     env = ActionMasker(env, _mask_fn)
     return env
 
 
+# Replica train_agent() permitiendo variar el reward_config del entorno.
 def _train_with_reward(instance, ppo_config, reward_config):
     env = _build_env_with_reward(instance, reward_config, seed=ppo_config.seed)
     model = MaskablePPO(
@@ -83,14 +80,12 @@ def main():
     instance = load_instance(DATA_DIR / "p04.txt")
     bks = _bks("p04")
 
-    # Configuraciones a evaluar sobre p04
     configs = [
         ("baseline: -500, lambda=0",     -500.0,   0.0),
         ("penal baja: -50, lambda=0",     -50.0,   0.0),
         ("rescate: -50, lambda=-50",      -50.0, -50.0),
     ]
 
-    # Configuración escalada usada en la memoria para 75 clientes
     base_ppo = PPOConfig(
         total_timesteps=500_000,
         ent_coef=0.05,
@@ -137,7 +132,6 @@ def main():
             "num_routes": ev.num_routes,
         })
 
-    # Resumen final
     print(f"\n{'='*76}")
     print("  RESUMEN — instancia p04, semilla 0, 500k pasos, red [512,512]")
     print(f"{'='*76}")

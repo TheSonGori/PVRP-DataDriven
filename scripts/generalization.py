@@ -1,23 +1,18 @@
 """
-Script de experimentos de generalización (Día 13).
+CLI de experimentos de generalización, con dos sub-comandos: "zero-shot"
+(evalúa un agente ya entrenado en instancias distintas a la de su
+entrenamiento, sin reentrenar, para medir si generaliza o memorizó) y
+"multi" (entrena un agente nuevo rotando entre varias instancias y lo
+evalúa en todas). Requiere que todas las instancias tengan el mismo número
+de clientes (mismo state_dim y action_dim).
 
-Dos experimentos:
+Uso:
+    python scripts/generalization.py zero-shot --train-instance p01 --test-instances p02 p03
+    python scripts/generalization.py multi --instances p01 p02 p03 --timesteps 300000 --tensorboard
 
-  1. CERO-SHOT: carga un agente ya entrenado en una instancia y lo evalúa
-     en otras instancias compatibles SIN reentrenar. Mide si el agente
-     generaliza o solo memorizó la instancia de entrenamiento.
-
-         python scripts/generalization.py zero-shot \
-             --train-instance p01 --test-instances p02 p03
-
-  2. MULTI-INSTANCIA: entrena un agente nuevo rotando entre varias
-     instancias y lo evalúa en todas ellas.
-
-         python scripts/generalization.py multi \
-             --instances p01 p02 p03 --timesteps 300000 --tensorboard
-
-Requisito: todas las instancias deben tener el mismo número de clientes
-(mismo state_dim y action_dim).
+Entrada: argumentos de línea de comandos (ver cada sub-parser en main()).
+Salida: tablas de costo/BKS/gap impresas en consola; en "multi" además
+guarda el modelo entrenado en results/models/. Código de salida 0/1.
 """
 
 from __future__ import annotations
@@ -42,6 +37,7 @@ from src.data.solution_loader import load_solution
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 
+# Costo de la BKS de una instancia, o None si no hay .res disponible.
 def _bks(name: str):
     p = DATA_DIR / f"{name}.res"
     if p.exists():
@@ -52,8 +48,8 @@ def _bks(name: str):
     return None
 
 
+# Evalúa un modelo entrenado en una instancia sobre esa misma instancia y otras (cero-shot).
 def run_zero_shot(args) -> int:
-    """Evalúa un modelo entrenado en una instancia sobre otras."""
     model_path = (
         Path(args.model_path)
         if args.model_path
@@ -88,8 +84,8 @@ def run_zero_shot(args) -> int:
     return 0
 
 
+# Entrena un agente multi-instancia y lo evalúa en todas las instancias dadas.
 def run_multi(args) -> int:
-    """Entrena un agente multi-instancia y lo evalúa en todas."""
     names = args.instances
     instances = [load_instance(DATA_DIR / f"{n}.txt") for n in names]
 
@@ -138,13 +134,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Experimentos de generalización.")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # Sub-comando zero-shot
     zs = sub.add_parser("zero-shot", help="Evaluar un modelo en instancias nuevas.")
     zs.add_argument("--train-instance", type=str, default="p01")
     zs.add_argument("--test-instances", type=str, nargs="+", default=["p02", "p03"])
     zs.add_argument("--model-path", type=str, default=None)
 
-    # Sub-comando multi
     mi = sub.add_parser("multi", help="Entrenar agente multi-instancia.")
     mi.add_argument("--instances", type=str, nargs="+", default=["p01", "p02", "p03"])
     mi.add_argument("--timesteps", type=int, default=300_000)

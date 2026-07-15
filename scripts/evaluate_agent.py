@@ -1,14 +1,12 @@
 """
-Script ejecutable para evaluar un agente PVRP-RL ya entrenado y compararlo
-con las heurísticas de referencia (Greedy y VNS).
+CLI que carga un agente PVRP-RL ya entrenado y lo compara contra Greedy y
+VNS (uso: `python scripts/evaluate_agent.py --instance p01 --stochastic-runs
+30 --vns-iters 150`).
 
-Uso:
-
-    # Comparar el modelo entrenado de p01 contra los baselines
-    python scripts/evaluate_agent.py --instance p01
-
-    # Ajustar número de muestreos estocásticos e iteraciones de VNS
-    python scripts/evaluate_agent.py --instance p01 --stochastic-runs 30 --vns-iters 150
+Entrada: argumentos --instance, --model-path (opcional, por defecto
+results/models/ppo_<instance>.zip), --stochastic-runs y --vns-iters.
+Salida: tabla comparativa impresa en consola (compare_methods +
+print_comparison); código de salida 0 si el modelo existe, 1 si no.
 """
 
 from __future__ import annotations
@@ -43,7 +41,6 @@ def main() -> int:
     data_dir = PROJECT_ROOT / "data" / "raw"
     instance = load_instance(data_dir / f"{args.instance}.txt")
 
-    # Cargar el modelo entrenado
     if args.model_path:
         model_path = Path(args.model_path)
     else:

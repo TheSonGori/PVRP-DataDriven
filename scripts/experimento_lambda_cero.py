@@ -1,19 +1,15 @@
 """
-Experimento comparativo: penalización fija (lambda=0) vs proporcional.
-
-Demuestra el fenómeno de reward hacking cuando la penalización terminal
-es de magnitud fija ante cualquier infactibilidad, independientemente
-del número de clientes no atendidos. Bajo esa formulación, el agente
+Experimento de reward hacking: compara penalización terminal fija
+(lambda=0, sin componente proporcional a las visitas faltantes) contra
+penalización proporcional, sobre p01. Con penalización fija el agente
 carece de gradiente para mejorar la cobertura y colapsa a políticas
-triviales.
+triviales; construye el entorno manualmente con un reward_config custom
+porque train_agent() no lo acepta como parámetro (uso:
+`python scripts/experimento_lambda_cero.py`; ~18-20 min).
 
-Construye el entorno manualmente con reward_config custom, ya que
-train_agent() no lo acepta como parámetro. La lógica de entrenamiento
-replica la de train_agent() pero permite variar el reward_config.
-
-    python scripts/experimento_lambda_cero.py
-
-Tiempo estimado: ~18-20 minutos (dos entrenamientos de ~9 min cada uno).
+Entrada: ninguna (usa la instancia p01 fija y dos RewardConfig predefinidos).
+Salida: tabla comparativa (costo, gap, factibilidad, rutas) impresa en
+consola para ambas formulaciones de recompensa.
 """
 
 from __future__ import annotations
@@ -30,7 +26,7 @@ from sb3_contrib.common.wrappers import ActionMasker
 
 from src.agent.evaluate import evaluate_deterministic
 from src.agent.policy_config import PPOConfig
-from src.agent.train import _mask_fn  # helper interno del proyecto
+from src.agent.train import _mask_fn
 from src.data.instance_loader import load_instance
 from src.data.solution_loader import load_solution
 from src.environment.pvrp_env import PVRPEnv
@@ -40,6 +36,7 @@ from src.environment.reward import RewardConfig
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 
+# Costo de la BKS de una instancia, o None si no hay .res disponible.
 def _bks(name: str):
     p = DATA_DIR / f"{name}.res"
     if p.exists():
@@ -50,18 +47,15 @@ def _bks(name: str):
     return None
 
 
+# Construye el entorno PVRP con un reward_config custom (replica build_env()).
 def _build_env_with_reward(instance, reward_config, seed=0):
-    """Construye el entorno PVRP con un reward_config custom, replicando build_env()."""
     env = PVRPEnv(instance, reward_config=reward_config, seed=seed)
     env = ActionMasker(env, _mask_fn)
     return env
 
 
+# Replica train_agent() permitiendo variar el reward_config del entorno.
 def _train_with_reward(instance, ppo_config, reward_config):
-    """
-    Replica la lógica esencial de train_agent() pero permite variar el
-    reward_config del entorno.
-    """
     env = _build_env_with_reward(instance, reward_config, seed=ppo_config.seed)
 
     model = MaskablePPO(
@@ -88,14 +82,12 @@ def main():
     instance = load_instance(DATA_DIR / "p01.txt")
     bks = _bks("p01")
 
-    # Formulación rota: penalización fija ante infactibilidad
     reward_broken = RewardConfig(
         terminal_bonus=100.0,
         infeasibility_penalty=-500.0,
-        per_missing_penalty=0.0,  # <-- la clave del reward hacking
+        per_missing_penalty=0.0,
     )
 
-    # Formulación correcta: penalización proporcional (default de la memoria)
     reward_fixed = RewardConfig(
         terminal_bonus=100.0,
         infeasibility_penalty=-500.0,
@@ -115,7 +107,6 @@ def main():
     print(f"  Instancia: p01  |  Semilla: 0  |  BKS: {bks:.2f}")
     print(f"{'='*72}")
 
-    # --- Corrida 1: formulación rota ---
     print("\n[1/2] Entrenando con penalizacion FIJA (lambda = 0)...")
     t0 = time.time()
     model_broken = _train_with_reward(instance, base_config, reward_broken)
@@ -128,7 +119,6 @@ def main():
           f"factible={feas_broken}  rutas={ev_broken.num_routes}  "
           f"({t_broken/60:.1f} min)")
 
-    # --- Corrida 2: formulación correcta ---
     print("\n[2/2] Entrenando con penalizacion PROPORCIONAL (lambda = -50)...")
     t0 = time.time()
     model_fixed = _train_with_reward(instance, base_config, reward_fixed)
@@ -141,7 +131,6 @@ def main():
           f"factible={feas_fixed}  rutas={ev_fixed.num_routes}  "
           f"({t_fixed/60:.1f} min)")
 
-    # --- Resumen ---
     print(f"\n{'='*72}")
     print("  RESUMEN COMPARATIVO — instancia p01, semilla 0")
     print(f"{'='*72}")

@@ -1,16 +1,14 @@
 """
-Experimento: barrido de infeasibility_penalty para encontrar reward hacking.
-
-En la configuración estándar (infeasibility_penalty = -500), la penalización
-base ya es suficientemente grande como para producir factibilidad universal
-incluso sin penalización proporcional (lambda = 0). Este experimento reduce
+Experimento de barrido de infeasibility_penalty sobre p01: reduce
 progresivamente la magnitud de la penalización base para identificar el
-umbral en el que emerge el reward hacking, y demuestra empíricamente que
-la penalización proporcional (lambda = -50) rescata al agente en ese régimen.
+umbral en el que emerge el reward hacking (colapso a soluciones triviales),
+y muestra que la penalización proporcional (lambda=-50) rescata al agente
+en ese régimen (uso: `python scripts/experimento_lambda_barrido.py`; ~32 min).
 
-    python scripts/experimento_lambda_barrido.py
-
-Tiempo estimado: ~32 minutos (4 entrenamientos de ~8 min cada uno).
+Entrada: ninguna (usa la instancia p01 fija y 4 combinaciones predefinidas
+de infeasibility_penalty / per_missing_penalty).
+Salida: tabla comparativa (costo, gap, factibilidad, rutas) impresa en
+consola para cada configuración del barrido.
 """
 
 from __future__ import annotations
@@ -37,6 +35,7 @@ from src.environment.reward import RewardConfig
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 
+# Costo de la BKS de una instancia, o None si no hay .res disponible.
 def _bks(name: str):
     p = DATA_DIR / f"{name}.res"
     if p.exists():
@@ -47,12 +46,14 @@ def _bks(name: str):
     return None
 
 
+# Construye el entorno PVRP con un reward_config custom.
 def _build_env_with_reward(instance, reward_config, seed=0):
     env = PVRPEnv(instance, reward_config=reward_config, seed=seed)
     env = ActionMasker(env, _mask_fn)
     return env
 
 
+# Replica train_agent() permitiendo variar el reward_config del entorno.
 def _train_with_reward(instance, ppo_config, reward_config):
     env = _build_env_with_reward(instance, reward_config, seed=ppo_config.seed)
     model = MaskablePPO(
@@ -78,7 +79,7 @@ def main():
     instance = load_instance(DATA_DIR / "p01.txt")
     bks = _bks("p01")
 
-    # Configuraciones a evaluar: (etiqueta, infeasibility_penalty, per_missing_penalty)
+    # (etiqueta, infeasibility_penalty, per_missing_penalty)
     configs = [
         ("baseline: -500, lambda=0",     -500.0,   0.0),
         ("penal media: -100, lambda=0",  -100.0,   0.0),
@@ -131,7 +132,6 @@ def main():
             "num_routes": ev.num_routes,
         })
 
-    # --- Resumen final ---
     print(f"\n{'='*76}")
     print("  RESUMEN DEL BARRIDO — instancia p01, semilla 0, 300k pasos")
     print(f"{'='*76}")

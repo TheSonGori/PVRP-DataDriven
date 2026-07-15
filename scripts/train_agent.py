@@ -1,16 +1,14 @@
 """
-Script ejecutable para entrenar el agente PVRP-RL.
+CLI para entrenar el agente PVRP-RL con hiperparámetros configurables por
+línea de comandos, y evaluarlo al terminar contra la BKS si existe (uso:
+`python scripts/train_agent.py --instance p01 --timesteps 200000 --tensorboard`;
+visualizar con `tensorboard --logdir results/tensorboard`).
 
-Uso:
-
-    # Entrenamiento corto de prueba (50k pasos)
-    python scripts/train_agent.py --instance p01 --timesteps 50000
-
-    # Entrenamiento completo con TensorBoard
-    python scripts/train_agent.py --instance p01 --timesteps 200000 --tensorboard
-
-    # Para visualizar el entrenamiento en tiempo real (en otra terminal):
-    tensorboard --logdir results/tensorboard
+Entrada: argumentos --instance, --timesteps, --learning-rate, --n-steps,
+--ent-coef, --net-arch, --seed, --tensorboard, --verbose.
+Salida: modelo entrenado guardado en results/models/ppo_<instance>.zip;
+resumen de costo/rutas/factibilidad/gap impreso en consola; código de
+salida 0 si la solución final es factible, 1 si no.
 """
 
 from __future__ import annotations
@@ -20,7 +18,6 @@ import sys
 import time
 from pathlib import Path
 
-# Permite ejecutar el script directamente desde cualquier ubicación.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -31,8 +28,8 @@ from src.data.instance_loader import load_instance
 from src.data.solution_loader import load_solution
 
 
+# Ejecuta un episodio con el agente entrenado y devuelve la solución construida.
 def evaluate_agent(model, env, deterministic: bool = True, max_steps: int = 5000):
-    """Ejecuta un episodio con el agente entrenado y retorna la solución."""
     obs, _ = env.reset()
     terminated = False
     steps = 0
@@ -82,12 +79,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Cargar instancia
     data_dir = PROJECT_ROOT / "data" / "raw"
     instance = load_instance(data_dir / f"{args.instance}.txt")
     print(f"Instancia: {instance}")
 
-    # Configurar entrenamiento
     config = PPOConfig(
         total_timesteps=args.timesteps,
         learning_rate=args.learning_rate,
@@ -118,7 +113,6 @@ def main() -> int:
     print(f"\nEntrenamiento completado en {elapsed:.1f}s ({elapsed/60:.1f} min)")
     print(f"Modelo guardado en: {model_path}.zip")
 
-    # Evaluación post-entrenamiento
     print("\nEvaluando agente entrenado...")
     env = build_env(instance, seed=args.seed)
     sol = evaluate_agent(model, env, deterministic=True)
@@ -129,7 +123,6 @@ def main() -> int:
     print(f"  Rutas:       {len(sol.routes)}")
     print(f"  Factible:    {feasible}")
 
-    # Comparar con BKS si existe
     bks_path = data_dir / f"{args.instance}.res"
     if bks_path.exists():
         bks = load_solution(bks_path)
