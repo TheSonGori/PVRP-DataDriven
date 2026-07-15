@@ -1,24 +1,14 @@
 """
-Variable Neighborhood Search (VNS) para el PVRP — versión completa.
+Variable Neighborhood Search (VNS) general para el PVRP: parte de una
+solución (Greedy si no se provee otra), aplica búsqueda local con los
+operadores de vecindad hasta un óptimo local, y cuando no mejora perturba la
+solución (shaking) con intensidad creciente k, reiniciando k al encontrar
+mejora.
 
-Esta implementación sigue la estructura clásica de **General VNS**
-[Hansen & Mladenović, 2001; Hemmelmayr et al., 2009]:
-
-    1. Construir una solución inicial con la heurística Greedy.
-    2. Bucle principal:
-        a. Búsqueda local: aplicar operadores de vecindad hasta óptimo local.
-        b. Si el óptimo local mejora la mejor solución, aceptarla y resetear k=1.
-        c. Si no mejora, aumentar k (más perturbación) y aplicar shaking.
-        d. Repetir hasta agotar iteraciones o tiempo.
-
-El parámetro `k` controla la **intensidad de la perturbación**: se incrementa
-cuando la búsqueda se estanca y se reinicia al encontrar mejora. Esta
-alternancia intensificación–diversificación es la esencia de VNS.
-
-Referencias:
-    - Hansen, P., & Mladenović, N. (2001). Variable neighborhood search.
-    - Hemmelmayr et al. (2009). A variable neighborhood search heuristic
-      for periodic routing problems.
+Entrada: una Instance (src/data/instance.py), tope de iteraciones/tiempo,
+k_max, una Solution inicial opcional y una semilla.
+Salida: un VNSResult con la mejor Solution encontrada y estadísticas de la
+ejecución (costo inicial/final, mejora, iteraciones, llamadas a operadores).
 """
 
 from __future__ import annotations
@@ -37,9 +27,9 @@ from src.utils.distance import build_distance_matrix, build_id_to_index_map
 from src.utils.solution import Solution
 
 
+# Resultado de una ejecución del VNS: solución final y estadísticas de la búsqueda.
 @dataclass
 class VNSResult:
-    """Resultado de una ejecución del VNS."""
     solution: Solution
     initial_cost: float
     final_cost: float
@@ -52,6 +42,7 @@ class VNSResult:
     elapsed_time: float = 0.0
 
 
+# Aplica los operadores de vecindad repetidamente hasta no encontrar más mejoras (óptimo local).
 def _local_search(
     solution: Solution,
     instance: Instance,
@@ -59,10 +50,6 @@ def _local_search(
     id_to_idx,
     operator_hits: dict,
 ) -> Solution:
-    """
-    Aplica iterativamente todos los operadores de vecindad hasta no
-    encontrar mejora (óptimo local).
-    """
     current = solution
     current_cost = current.total_cost(instance)
     while True:
@@ -77,11 +64,12 @@ def _local_search(
                 current_cost = candidate_cost
                 operator_hits[op_name] = operator_hits.get(op_name, 0) + 1
                 improved = True
-                break  # reiniciar desde el primer operador
+                break
         if not improved:
             return current
 
 
+# Ejecuta el VNS completo (búsqueda local + shaking) sobre una instancia del PVRP.
 def vns_solve(
     instance: Instance,
     max_iterations: int = 100,
@@ -91,22 +79,6 @@ def vns_solve(
     seed: int = 0,
     verbose: bool = False,
 ) -> VNSResult:
-    """
-    Resuelve una instancia del PVRP con VNS general (búsqueda local + shaking).
-
-    Args:
-        instance: Instancia del PVRP.
-        max_iterations: Tope superior de iteraciones del bucle externo.
-        time_limit: Tiempo máximo en segundos (None = sin límite).
-        k_max: Nivel máximo de perturbación. Se incrementa cuando no hay
-            mejora y se reinicia a 1 al encontrar una.
-        initial_solution: Solución inicial. Si es None, se genera con Greedy.
-        seed: Semilla aleatoria para reproducibilidad del shaking.
-        verbose: Si True, imprime progreso por consola.
-
-    Returns:
-        Un `VNSResult` con la solución y estadísticas.
-    """
     matrix = build_distance_matrix(instance)
     id_to_idx = build_id_to_index_map(instance)
     rng = random.Random(seed)
@@ -116,11 +88,10 @@ def vns_solve(
     else:
         current = initial_solution
 
-    # Búsqueda local inicial sobre el punto de partida.
     operator_hits: dict = {}
     current = _local_search(current, instance, matrix, id_to_idx, operator_hits)
     current_cost = current.total_cost(instance)
-    initial_cost = current_cost  # registramos el costo POST-LS sobre Greedy
+    initial_cost = current_cost
 
     best = current
     best_cost = current_cost
@@ -138,16 +109,13 @@ def vns_solve(
         if time_limit is not None and (time.time() - start_time) > time_limit:
             break
 
-        # 1. Shaking: perturbar la mejor solución actual con intensidad k.
         perturbed = shake(best, instance, k=k, rng=rng)
         shaking_calls += 1
 
-        # 2. Búsqueda local desde el punto perturbado.
         local_opt = _local_search(perturbed, instance, matrix, id_to_idx, operator_hits)
         local_search_calls += 1
         local_cost = local_opt.total_cost(instance)
 
-        # 3. Aceptación: si mejora la mejor global, aceptar y reiniciar k.
         if local_cost < best_cost - 1e-9:
             best = local_opt
             best_cost = local_cost
@@ -155,7 +123,6 @@ def vns_solve(
             if verbose:
                 print(f"[VNS] iter {iterations:4d}  costo={best_cost:.2f}  (k=1)")
         else:
-            # No mejoró: aumentar perturbación.
             k = k + 1 if k < k_max else 1
 
         iterations += 1

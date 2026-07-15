@@ -1,6 +1,11 @@
 """
-Tests para los métodos de la clase `Solution` agregados en el Día 3:
-construcción incremental, consultas de patrón asignado y resumen estadístico.
+Tests de los métodos de Solution: construcción incremental, consulta de
+días de visita y patrón asignado, resumen estadístico, y cálculo de carga
+por ruta (Route.load).
+
+Entrada: la instancia p01 y su BKS (data/raw/p01.txt, p01.res), además de
+Solution/Route construidas manualmente.
+Salida: aserciones pytest; no retorna valores.
 """
 
 from __future__ import annotations
@@ -27,18 +32,15 @@ def bks_solution():
     return load_solution(DATA_DIR / "p01.res")
 
 
-# =============================================================================
-#  Construcción incremental
-# =============================================================================
-
 class TestIncrementalConstruction:
-    """Verifica que add_route() permite construir soluciones paso a paso."""
 
+    # add_route agrega una única ruta a la solución.
     def test_add_single_route(self):
         s = Solution()
         s.add_route(Route(day=1, vehicle_id=1, nodes=[0, 5, 0]))
         assert len(s.routes) == 1
 
+    # add_route permite construir la solución agregando varias rutas en distintos días.
     def test_add_multiple_routes(self):
         s = Solution()
         s.add_route(Route(day=1, vehicle_id=1, nodes=[0, 1, 0]))
@@ -49,32 +51,28 @@ class TestIncrementalConstruction:
         assert len(s.routes_by_day(2)) == 1
 
 
-# =============================================================================
-#  customer_visit_days
-# =============================================================================
-
 class TestCustomerVisitDays:
-    """Verifica la consulta de días en que se visita un cliente."""
 
+    # Un cliente no visitado devuelve una tupla vacía de días.
     def test_customer_not_visited(self):
         s = Solution()
         assert s.customer_visit_days(42) == ()
 
+    # Un cliente visitado una vez devuelve una tupla con ese único día.
     def test_customer_visited_once(self):
         s = Solution(routes=[Route(day=2, vehicle_id=1, nodes=[0, 7, 0])])
         assert s.customer_visit_days(7) == (2,)
 
+    # Los días de visita se devuelven ordenados.
     def test_customer_visited_twice_sorted(self):
         s = Solution(routes=[
             Route(day=3, vehicle_id=1, nodes=[0, 7, 0]),
             Route(day=1, vehicle_id=1, nodes=[0, 7, 0]),
         ])
-        # El resultado debe estar ordenado
         assert s.customer_visit_days(7) == (1, 3)
 
+    # En p01 (todos frecuencia 1), la BKS visita a cada cliente exactamente un día.
     def test_on_bks_p01(self, bks_solution, instance):
-        """En p01 cada cliente tiene frecuencia 1, así que la BKS visita a
-        cada uno exactamente un día."""
         for c in instance.customers:
             days = bks_solution.customer_visit_days(c.id)
             assert len(days) == 1, (
@@ -82,15 +80,10 @@ class TestCustomerVisitDays:
             )
 
 
-# =============================================================================
-#  get_assigned_pattern
-# =============================================================================
-
 class TestAssignedPattern:
-    """Verifica la identificación del patrón asignado a cada cliente."""
 
+    # Toda visita en la BKS corresponde a un patrón permitido del cliente.
     def test_valid_pattern_on_bks(self, bks_solution, instance):
-        """Toda visita en la BKS debe corresponder a un patrón válido del cliente."""
         for c in instance.customers:
             pattern = bks_solution.get_assigned_pattern(c.id, instance)
             assert pattern is not None, (
@@ -98,34 +91,24 @@ class TestAssignedPattern:
             )
             assert pattern in c.allowed_patterns
 
+    # Si los días visitados no forman un patrón válido, se devuelve None.
     def test_invalid_pattern_returns_none(self, instance):
-        """Si un cliente se visita en días que no forman un patrón válido,
-        el método debe devolver None."""
-        # Buscamos un cliente cuya frecuencia sea 1 (típico en p01).
         c = next(c for c in instance.customers if c.frequency == 1)
 
-        # Construimos una solución que visita ese cliente 2 veces (incorrecto)
         s = Solution(routes=[
             Route(day=1, vehicle_id=1, nodes=[0, c.id, 0]),
             Route(day=2, vehicle_id=1, nodes=[0, c.id, 0]),
         ])
-        # El conjunto de días visitados (1, 2) no debería estar en patrones
-        # válidos para un cliente de frecuencia 1.
         result = s.get_assigned_pattern(c.id, instance)
         assert result is None
 
 
-# =============================================================================
-#  summary
-# =============================================================================
-
 class TestSummary:
-    """Verifica el resumen estadístico de la solución."""
 
+    # summary() incluye todos los campos esperados con los valores correctos para la BKS de p01.
     def test_summary_on_bks(self, bks_solution, instance):
         summary = bks_solution.summary(instance, bks_cost=524.61)
 
-        # Campos obligatorios
         assert "total_cost" in summary
         assert "num_routes" in summary
         assert "avg_routes_per_day" in summary
@@ -136,50 +119,36 @@ class TestSummary:
         assert "num_violations" in summary
         assert "gap_to_bks" in summary
 
-        # Valores esperados de p01
         assert summary["total_cost"] == pytest.approx(524.61, abs=0.5)
         assert summary["num_routes"] == 5.0
         assert summary["avg_routes_per_day"] == 2.5
         assert summary["is_feasible"] == 1.0
         assert summary["num_violations"] == 0.0
 
-        # El gap respecto a sí misma es prácticamente cero
         assert abs(summary["gap_to_bks"]) < 0.5
 
+    # Sin bks_cost, la clave gap_to_bks no aparece en el resumen.
     def test_summary_without_bks(self, bks_solution, instance):
-        """Sin proveer bks_cost, no debe existir la clave gap_to_bks."""
         summary = bks_solution.summary(instance, bks_cost=None)
         assert "gap_to_bks" not in summary
 
+    # capacity_utilization está en [0, 1] para una solución factible.
     def test_capacity_utilization_within_unit(self, bks_solution, instance):
-        """capacity_utilization debe estar en [0, 1] para una solución factible."""
         summary = bks_solution.summary(instance)
         assert 0.0 <= summary["capacity_utilization"] <= 1.0
 
+    # Comparar la BKS contra sí misma da un gap prácticamente cero.
     def test_gap_is_zero_for_optimal(self, instance):
-        """Cargar la BKS y compararla contra sí misma da gap ≈ 0."""
         sol = load_solution(DATA_DIR / "p01.res")
         cost = sol.total_cost(instance)
         summary = sol.summary(instance, bks_cost=cost)
         assert abs(summary["gap_to_bks"]) < 1e-6
 
 
-# =============================================================================
-#  Route.load
-# =============================================================================
-
 class TestRouteLoad:
-    """Verifica el cálculo de carga total de una ruta."""
 
+    # Las cargas calculadas por Route.load coinciden con las reportadas en p01.res.
     def test_load_matches_reported_for_bks(self, bks_solution, instance):
-        """
-        Las cargas calculadas deben coincidir con las reportadas en p01.res:
-            día 1 veh 1 -> 149
-            día 1 veh 2 -> 157
-            día 2 veh 1 -> 152
-            día 2 veh 2 -> 159
-            día 2 veh 3 -> 160
-        """
         expected_loads = {
             (1, 1): 149,
             (1, 2): 157,

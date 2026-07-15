@@ -1,14 +1,11 @@
 """
-Hiperparámetros del agente de Aprendizaje por Refuerzo.
+Hiperparámetros del agente MaskablePPO, separados del código de entrenamiento
+para facilitar la experimentación.
 
-Esta configuración se separa del código de entrenamiento (`train.py`) para
-facilitar la experimentación y la documentación en el Capítulo 4 de la memoria.
-Los valores por defecto siguen las recomendaciones de la documentación oficial
-de stable-baselines3 para problemas combinatorios pequeños.
-
-Para ajustes específicos, instanciar `PPOConfig` con los valores deseados:
-
-    cfg = PPOConfig(total_timesteps=200_000, learning_rate=1e-4)
+Entrada: valores opcionales para instanciar PPOConfig (total_timesteps,
+learning_rate, arquitectura de red, etc.).
+Salida: un PPOConfig (o una de las configuraciones predefinidas
+SMOKE_TEST_CONFIG, QUICK_TRAIN_CONFIG, FULL_TRAIN_CONFIG) usado por train.py.
 """
 
 from __future__ import annotations
@@ -17,32 +14,9 @@ from dataclasses import dataclass, field
 from typing import List
 
 
+# Configuración del agente MaskablePPO: hiperparámetros de entrenamiento y arquitectura de red.
 @dataclass(frozen=True)
 class PPOConfig:
-    """
-    Configuración del agente MaskablePPO.
-
-    Attributes:
-        total_timesteps: Número total de interacciones agente-entorno durante
-            el entrenamiento. Más pasos = mejor convergencia pero más tiempo.
-        learning_rate: Tasa de aprendizaje del optimizador Adam.
-        n_steps: Número de pasos recolectados antes de cada actualización
-            de política. Valores grandes estabilizan; valores pequeños son
-            más eficientes en memoria.
-        batch_size: Tamaño del minibatch para SGD. Debe dividir a n_steps.
-        n_epochs: Número de pases sobre los datos recolectados por actualización.
-        gamma: Factor de descuento. Valores cercanos a 1 dan más peso a
-            recompensas futuras (importante para problemas con horizonte largo
-            como el PVRP).
-        gae_lambda: Coeficiente GAE para estimar ventajas.
-        clip_range: Recorte de PPO. Limita cuánto puede cambiar la política
-            en cada actualización.
-        ent_coef: Coeficiente de entropía. Mayores valores fomentan exploración.
-        policy_kwargs: Parámetros adicionales de la política (arquitectura
-            de la red neuronal).
-        verbose: 0 = silencioso, 1 = info, 2 = debug.
-        seed: Semilla para reproducibilidad.
-    """
     total_timesteps: int = 100_000
     learning_rate: float = 3e-4
     n_steps: int = 2048
@@ -59,7 +33,6 @@ class PPOConfig:
     seed: int = 42
 
 
-# Configuraciones nombradas para escenarios típicos
 SMOKE_TEST_CONFIG = PPOConfig(
     total_timesteps=2_048,
     n_steps=512,
@@ -67,9 +40,6 @@ SMOKE_TEST_CONFIG = PPOConfig(
     verbose=0,
 )
 
-# Configuración recomendada tras el análisis del Día 11: más exploración
-# (ent_coef alto) y red más grande mejoran notablemente la convergencia en
-# problemas combinatorios como el PVRP.
 QUICK_TRAIN_CONFIG = PPOConfig(
     total_timesteps=150_000,
     ent_coef=0.05,

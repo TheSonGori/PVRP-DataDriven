@@ -1,33 +1,13 @@
 """
-Heurística constructiva Greedy para el PVRP.
+Heurística constructiva Greedy (vecino más cercano) para el PVRP: primero
+asigna a cada cliente un patrón de visita balanceando la carga por día, luego
+construye rutas diarias visitando siempre al cliente factible más conveniente
+según la estrategia elegida, y por último intenta reubicar a los clientes que
+no cupieron en su día asignado. Sirve como línea base frente a VNS y RL.
 
-Algoritmo
----------
-
-Esta implementación sigue la estrategia clásica del "vecino más cercano"
-adaptada al horizonte temporal del PVRP:
-
-    1. Asignación de patrones (fase temporal):
-       Para cada cliente, se selecciona uno de sus patrones permitidos
-       siguiendo una regla determinística simple (el patrón con menor
-       valor numérico, lo que tiende a distribuir las visitas
-       homogéneamente en el horizonte).
-
-    2. Construcción de rutas diarias (fase espacial):
-       Para cada día d ∈ T:
-            a. Mientras existan clientes pendientes para el día d:
-                - Lanzar un vehículo desde el depósito.
-                - Repetir hasta que no quepa ningún cliente más en el vehículo:
-                    · Elegir el cliente pendiente más cercano que QUEPA en
-                      la capacidad restante.
-                · Cerrar ruta retornando al depósito.
-
-Esta heurística es **miope**: cada decisión optimiza un criterio local
-(distancia inmediata) sin considerar el impacto global. Sirve como
-**línea base** para evaluar métodos más sofisticados (VNS, RL) en los
-Capítulos 4 y 5 de la memoria.
-
-Complejidad: O(N^2 * T) en el peor caso.
+Entrada: una Instance (src/data/instance.py).
+Salida: una Solution (src/utils/solution.py), idealmente factible; si ninguna
+estrategia produce una solución factible, se devuelve la de menor costo.
 """
 
 from __future__ import annotations
@@ -41,31 +21,11 @@ from src.utils.distance import build_distance_matrix, build_id_to_index_map
 from src.utils.solution import Route, Solution
 
 
+# Asigna a cada cliente el patrón permitido que mejor balancea la carga entre días.
 def _assign_patterns(instance: Instance) -> Dict[int, Tuple[int, ...]]:
-    """
-    Asigna a cada cliente uno de sus patrones permitidos balanceando la
-    carga total entre los días del horizonte.
-
-    Estrategia (greedy de balanceo):
-
-        1. Ordenar los clientes de mayor a menor demanda total (demanda × frecuencia).
-           Los clientes "pesados" se asignan primero para evitar quedar atrapados
-           más tarde en days saturados.
-        2. Para cada cliente, recorrer sus patrones permitidos y elegir aquel
-           cuya suma de carga en los días involucrados sea la menor.
-        3. Actualizar la carga acumulada por día.
-
-    Esta heurística produce asignaciones bastante uniformes y evita el caso
-    degenerado en que todos los clientes terminan asignados al mismo día.
-
-    Returns:
-        Diccionario {customer_id: pattern}.
-    """
-    # Carga acumulada por día (se actualiza durante la asignación).
     day_load: Dict[int, float] = {d: 0.0 for d in range(1, instance.horizon + 1)}
     assignment: Dict[int, Tuple[int, ...]] = {}
 
-    # Ordenar clientes por demanda total descendente.
     sorted_customers = sorted(
         instance.customers,
         key=lambda c: c.demand * c.frequency,
@@ -73,9 +33,6 @@ def _assign_patterns(instance: Instance) -> Dict[int, Tuple[int, ...]]:
     )
 
     for customer in sorted_customers:
-        # Para cada patrón permitido, calcular el "costo" de asignar:
-        # = máxima carga resultante en cualquiera de los días involucrados.
-        # Minimizar este máximo distribuye uniformemente.
         best_pattern = None
         best_score = float("inf")
         for pattern in customer.allowed_patterns:
@@ -93,13 +50,10 @@ def _assign_patterns(instance: Instance) -> Dict[int, Tuple[int, ...]]:
     return assignment
 
 
+# Lista, para cada día, los clientes que deben visitarse según los patrones asignados.
 def _customers_per_day(
     instance: Instance, patterns: Dict[int, Tuple[int, ...]]
 ) -> Dict[int, List[int]]:
-    """
-    Construye, para cada día del horizonte, la lista de clientes que deben
-    ser visitados ese día según la asignación de patrones.
-    """
     per_day: Dict[int, List[int]] = {d: [] for d in range(1, instance.horizon + 1)}
     for c_id, pattern in patterns.items():
         for day in pattern:
@@ -107,6 +61,7 @@ def _customers_per_day(
     return per_day
 
 
+# Cliente pendiente más cercano cuya demanda cabe en la capacidad restante.
 def _nearest_feasible_customer(
     current_idx: int,
     pending: Set[int],
@@ -115,13 +70,6 @@ def _nearest_feasible_customer(
     distance_matrix: np.ndarray,
     id_to_idx: Dict[int, int],
 ) -> Optional[int]:
-    """
-    Busca el cliente pendiente más cercano cuya demanda no exceda la
-    capacidad restante del vehículo.
-
-    Returns:
-        ID del cliente seleccionado, o `None` si ninguno cabe.
-    """
     best_id: Optional[int] = None
     best_dist = float("inf")
 
@@ -138,33 +86,8 @@ def _nearest_feasible_customer(
     return best_id
 
 
+# Prueba varias estrategias de construcción y devuelve la mejor solución factible encontrada.
 def greedy_solve(instance: Instance) -> Solution:
-    """
-    Resuelve el PVRP mediante la heurística Greedy del vecino más cercano.
-
-    El algoritmo procede en tres fases:
-
-        1. Asignación de patrones balanceada (`_assign_patterns`).
-        2. Construcción de rutas día a día con vecino más cercano.
-        3. Fase de reparación: si algún cliente quedó sin servir en su día
-           asignado por falta de capacidad, se intenta reubicarlo en otro
-           día compatible con sus patrones permitidos.
-
-    Para instancias **muy apretadas** (uso de capacidad cercano al 100%),
-    se prueban varias estrategias de ordenamiento de los clientes en la
-    fase 2 y se devuelve la mejor solución factible encontrada. Si ninguna
-    estrategia produce solución factible, se devuelve la de menor costo
-    (que la `is_feasible` reportará como infactible).
-
-    Args:
-        instance: Instancia del PVRP.
-
-    Returns:
-        Una `Solution`. Idealmente factible; si no, la mejor encontrada.
-    """
-    # Conjunto de estrategias a probar (variar el orden de los clientes
-    # pendientes en cada día cambia la estructura del empaque y a veces
-    # libera capacidad para clientes "difíciles").
     strategies = ["nearest", "demand_desc", "demand_asc", "far_first"]
 
     best_feasible: Optional[Solution] = None
@@ -187,21 +110,10 @@ def greedy_solve(instance: Instance) -> Solution:
     return best_feasible if best_feasible is not None else best_overall
 
 
+# Ejecuta una pasada completa del Greedy con la estrategia de selección indicada.
 def _greedy_single_pass(
     instance: Instance, strategy: str = "nearest"
 ) -> Solution:
-    """
-    Una pasada del algoritmo Greedy con una estrategia de ordenamiento dada.
-
-    Args:
-        instance: Instancia del PVRP.
-        strategy: Estrategia de elección del próximo cliente dentro del día:
-            - "nearest"     : el cliente más cercano que quepa.
-            - "demand_desc" : el cliente de mayor demanda que quepa.
-            - "demand_asc"  : el cliente de menor demanda que quepa.
-            - "far_first"   : el más lejano que quepa (libera capacidad para
-                              clientes pequeños después).
-    """
     distance_matrix = build_distance_matrix(instance)
     id_to_idx = build_id_to_index_map(instance)
 
@@ -256,6 +168,7 @@ def _greedy_single_pass(
     return solution
 
 
+# Elige el siguiente cliente a visitar según la estrategia (nearest/demand_desc/demand_asc/far_first).
 def _select_next_customer(
     current_idx: int,
     pending: Set[int],
@@ -265,8 +178,6 @@ def _select_next_customer(
     id_to_idx: Dict[int, int],
     strategy: str,
 ) -> Optional[int]:
-    """Selecciona el siguiente cliente según la estrategia indicada."""
-    # Filtrar candidatos factibles (que quepan en capacidad).
     candidates = [
         c_id for c_id in pending
         if instance.get_customer(c_id).demand <= remaining_capacity
@@ -292,6 +203,7 @@ def _select_next_customer(
         raise ValueError(f"Estrategia desconocida: {strategy}")
 
 
+# Intenta reubicar en otro día compatible a los clientes que no entraron en su día asignado.
 def _repair_unassigned(
     solution: Solution,
     unassigned: List[int],
@@ -301,17 +213,6 @@ def _repair_unassigned(
     distance_matrix: np.ndarray,
     id_to_idx: Dict[int, int],
 ) -> Solution:
-    """
-    Intenta reubicar clientes que no entraron en su día asignado.
-
-    Estrategia: para cada cliente sin servir, busca otro día permitido por
-    sus patrones donde haya capacidad sobrante y un vehículo disponible.
-    Si encuentra uno, lo inserta abriendo una nueva ruta en ese día.
-
-    Esta fase es una salvaguarda; en instancias bien dimensionadas no se
-    activa o procesa muy pocos clientes.
-    """
-    # Contar cuántos vehículos están ya usados por día.
     vehicles_used: Dict[int, int] = {
         d: 0 for d in range(1, instance.horizon + 1)
     }
@@ -321,13 +222,10 @@ def _repair_unassigned(
     for c_id in unassigned:
         customer = instance.get_customer(c_id)
 
-        # Buscar un día compatible con capacidad y vehículo disponibles.
-        # Considerar todos los patrones permitidos, no solo el asignado.
         candidate_days = set()
         for pattern in customer.allowed_patterns:
             candidate_days.update(pattern)
 
-        # Ordenar candidatos por menor uso de capacidad (más espacio libre).
         sorted_days = sorted(
             candidate_days,
             key=lambda d: day_used_capacity[d],
@@ -340,7 +238,6 @@ def _repair_unassigned(
                 day_used_capacity[day] + customer.demand <= total_cap
                 and vehicles_used[day] < instance.num_vehicles
             ):
-                # Abrir una nueva ruta solo para este cliente.
                 new_vehicle_id = vehicles_used[day] + 1
                 solution.add_route(Route(
                     day=day,
@@ -351,8 +248,5 @@ def _repair_unassigned(
                 vehicles_used[day] = new_vehicle_id
                 placed = True
                 break
-
-        # Si tampoco se pudo reubicar, la instancia es infactible para
-        # esta heurística (lo reportará is_feasible).
 
     return solution

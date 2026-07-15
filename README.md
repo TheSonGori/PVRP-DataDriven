@@ -62,7 +62,7 @@ pvrp-rl-memoria/
 
 ---
 
-## ⚙️ Requisitos
+## Requisitos
 
 - Python ≥ 3.10
 - Sistema operativo: Linux, macOS o Windows
@@ -80,7 +80,7 @@ Todas las dependencias están listadas en `requirements.txt`.
 
 ---
 
-## 🚀 Instalación
+## Instalación
 
 ```bash
 # Clonar el repositorio

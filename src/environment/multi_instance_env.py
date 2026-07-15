@@ -1,19 +1,13 @@
 """
-Entorno multi-instancia para entrenar un agente que generalice.
+Envuelve varias instancias del PVRP con la misma dimensión de estado/acción y
+elige una en cada reset() (cíclica o aleatoriamente), forzando al agente a
+aprender una política que generalice en vez de memorizar una sola instancia.
+Delega toda la lógica del PVRP en PVRPEnv.
 
-`MultiInstancePVRPEnv` envuelve varias instancias del PVRP que comparten la
-misma dimensión de estado y de acción, y en cada `reset()` selecciona una
-(de forma cíclica o aleatoria). Esto fuerza al agente a aprender una política
-que funcione en TODAS las instancias, en lugar de memorizar una sola.
-
-Requisito: todas las instancias deben producir el mismo `state_dim` y el mismo
-número de acciones (mismo número de clientes). En este proyecto, p01, p02 y
-p03 cumplen esto (50 clientes → state_dim=204, action_dim=51), aunque difieren
-en el horizonte temporal, lo que las hace un buen banco de prueba de
-generalización.
-
-El diseño delega toda la lógica del PVRP en `PVRPEnv`: este wrapper solo decide
-QUÉ instancia usar en cada episodio y reexpone la interfaz Gymnasium.
+Entrada: lista de Instance compatibles (mismo número de clientes), modo de
+selección ("cyclic"/"random") y semilla.
+Salida: un entorno Gymnasium (observación, recompensa, terminado, info) que
+reexpone la interfaz de PVRPEnv sobre la instancia activa en cada episodio.
 """
 
 from __future__ import annotations
@@ -29,16 +23,8 @@ from src.environment.pvrp_env import PVRPEnv
 from src.utils.solution import Solution
 
 
+# Entorno que rota entre varias instancias del PVRP en cada episodio.
 class MultiInstancePVRPEnv(gym.Env):
-    """
-    Entorno que rota entre varias instancias del PVRP en cada episodio.
-
-    Args:
-        instances: Lista de instancias compatibles (mismo state_dim y
-            action_dim).
-        selection: "cyclic" (rota en orden) o "random" (elige al azar).
-        seed: Semilla para reproducibilidad.
-    """
 
     metadata = {"render_modes": []}
 
@@ -57,7 +43,6 @@ class MultiInstancePVRPEnv(gym.Env):
         self._rng = random.Random(seed)
         self._cyclic_idx = 0
 
-        # Verificar compatibilidad: todas deben tener el mismo número de clientes.
         n0 = instances[0].num_customers
         for inst in instances:
             if inst.num_customers != n0:
@@ -67,12 +52,10 @@ class MultiInstancePVRPEnv(gym.Env):
                     "Todas deben tener el mismo número de clientes."
                 )
 
-        # Construir un sub-entorno por instancia (se reutilizan).
         self._envs = {
             inst.name: PVRPEnv(inst, seed=seed) for inst in instances
         }
 
-        # Los espacios son los mismos para todas: tomamos los de la primera.
         ref_env = self._envs[instances[0].name]
         self.observation_space = ref_env.observation_space
         self.action_space = ref_env.action_space
@@ -80,11 +63,11 @@ class MultiInstancePVRPEnv(gym.Env):
         self._current_env: Optional[PVRPEnv] = None
         self._current_name: Optional[str] = None
 
+    # Elige el nombre de la instancia para el próximo episodio.
     def _select_instance(self) -> str:
-        """Elige el nombre de la instancia para el próximo episodio."""
         if self.selection == "random":
             return self._rng.choice(list(self._envs.keys()))
-        else:  # cyclic
+        else:
             names = [inst.name for inst in self.instances]
             name = names[self._cyclic_idx % len(names)]
             self._cyclic_idx += 1
@@ -100,15 +83,15 @@ class MultiInstancePVRPEnv(gym.Env):
     def step(self, action):
         return self._current_env.step(action)
 
+    # Delegado al entorno activo (requerido por MaskablePPO).
     def action_masks(self) -> np.ndarray:
-        """Delegado al entorno activo (requerido por MaskablePPO)."""
         return self._current_env.action_masks()
 
+    # Solución del episodio actual.
     def get_solution(self) -> Solution:
-        """Solución del episodio actual."""
         return self._current_env.get_solution()
 
+    # Instancia activa (para que los callbacks puedan leer sus métricas).
     @property
     def instance(self) -> Instance:
-        """Instancia activa (para que los callbacks puedan leer sus métricas)."""
         return self._current_env.instance

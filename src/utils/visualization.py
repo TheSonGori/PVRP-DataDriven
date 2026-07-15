@@ -1,16 +1,11 @@
 """
-Funciones de visualización para instancias y soluciones del PVRP.
+Funciones de visualización (matplotlib) para instancias y soluciones del PVRP:
+disposición geográfica de clientes/depósito, distribución de demandas y
+frecuencias, y rutas de una solución separadas por día.
 
-Estas funciones están diseñadas para producir figuras de calidad académica que
-pueden incluirse directamente en la memoria (Capítulos 1, 4 y 5). Se separan
-del notebook de exploración para que sean reutilizables desde otros contextos
-(scripts de experimentación, generación automática de figuras del Capítulo 4).
-
-Convenciones de estilo:
-
-    - Depósito: cuadrado rojo grande.
-    - Clientes: puntos azules; tamaño/color pueden codificar frecuencia o demanda.
-    - Rutas: líneas con colores distintivos según día.
+Entrada: una Instance y, opcionalmente, una Solution (src/data/instance.py,
+src/utils/solution.py).
+Salida: objetos Figure de matplotlib listos para mostrar o guardar.
 """
 
 from __future__ import annotations
@@ -26,30 +21,23 @@ from src.data.instance import Instance
 from src.utils.solution import Solution
 
 
-# =============================================================================
-#  Paletas y constantes de estilo
-# =============================================================================
-
 _DAY_PALETTE = [
-    "#1f77b4",  # azul
-    "#ff7f0e",  # naranja
-    "#2ca02c",  # verde
-    "#d62728",  # rojo
-    "#9467bd",  # morado
-    "#8c564b",  # marrón
-    "#e377c2",  # rosa
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
 ]
 
 
+# Color cíclico asociado a un día del horizonte.
 def _day_color(day: int) -> str:
-    """Color asociado a un día del horizonte (cíclico)."""
     return _DAY_PALETTE[(day - 1) % len(_DAY_PALETTE)]
 
 
-# =============================================================================
-#  Visualización de instancias
-# =============================================================================
-
+# Dibuja la disposición geográfica de clientes y depósito de una instancia.
 def plot_instance(
     instance: Instance,
     *,
@@ -58,22 +46,6 @@ def plot_instance(
     show_ids: bool = False,
     title: Optional[str] = None,
 ) -> Figure:
-    """
-    Dibuja la disposición geográfica de los nodos de una instancia.
-
-    Args:
-        instance: Instancia a visualizar.
-        ax: Eje matplotlib opcional. Si no se provee, se crea una figura nueva.
-        color_by: Atributo que codifica el color de los clientes.
-            "frequency" -> color discreto por frecuencia de visita.
-            "demand"    -> mapa de calor continuo según demanda.
-            "none"      -> todos los clientes del mismo color.
-        show_ids: Si True, etiqueta cada cliente con su ID.
-        title: Título personalizado. Si es None, se usa el nombre de la instancia.
-
-    Returns:
-        La figura de matplotlib creada o utilizada.
-    """
     if ax is None:
         fig, ax = plt.subplots(figsize=(9, 9))
     else:
@@ -82,7 +54,6 @@ def plot_instance(
     xs = np.array([c.x for c in instance.customers])
     ys = np.array([c.y for c in instance.customers])
 
-    # Clientes
     if color_by == "frequency":
         freqs = np.array([c.frequency for c in instance.customers])
         scatter = ax.scatter(
@@ -108,7 +79,6 @@ def plot_instance(
             label="Clientes",
         )
 
-    # Depósito
     ax.scatter(
         [instance.depot.x], [instance.depot.y],
         marker="s", color="red", s=180,
@@ -116,7 +86,6 @@ def plot_instance(
         label="Depósito",
     )
 
-    # Etiquetas de IDs (opcional)
     if show_ids:
         for c in instance.customers:
             ax.annotate(
@@ -143,22 +112,12 @@ def plot_instance(
     return fig
 
 
+# Histograma de demandas de clientes con la capacidad vehicular marcada.
 def plot_demand_distribution(
     instance: Instance,
     *,
     ax: Optional[Axes] = None,
 ) -> Figure:
-    """
-    Dibuja un histograma de las demandas de los clientes con la capacidad
-    vehicular marcada como referencia.
-
-    Args:
-        instance: Instancia a analizar.
-        ax: Eje matplotlib opcional.
-
-    Returns:
-        Figura matplotlib.
-    """
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 5))
     else:
@@ -181,22 +140,12 @@ def plot_demand_distribution(
     return fig
 
 
+# Gráfico de barras con la cantidad de clientes por frecuencia de visita.
 def plot_frequency_distribution(
     instance: Instance,
     *,
     ax: Optional[Axes] = None,
 ) -> Figure:
-    """
-    Dibuja un gráfico de barras con la cantidad de clientes por frecuencia
-    de visita.
-
-    Args:
-        instance: Instancia a analizar.
-        ax: Eje matplotlib opcional.
-
-    Returns:
-        Figura matplotlib.
-    """
     if ax is None:
         fig, ax = plt.subplots(figsize=(7, 5))
     else:
@@ -227,10 +176,7 @@ def plot_frequency_distribution(
     return fig
 
 
-# =============================================================================
-#  Visualización de soluciones
-# =============================================================================
-
+# Visualiza una solución completa, un subplot por día con sus rutas coloreadas.
 def plot_solution(
     instance: Instance,
     solution: Solution,
@@ -238,22 +184,6 @@ def plot_solution(
     days: Optional[Sequence[int]] = None,
     title: Optional[str] = None,
 ) -> Figure:
-    """
-    Visualiza una solución del PVRP separando las rutas por día.
-
-    Cada día se dibuja en un subplot independiente, con sus rutas en colores
-    distintos. Esta figura es ideal para incluir en el Capítulo 4 de la
-    memoria al mostrar resultados cualitativos.
-
-    Args:
-        instance: Instancia correspondiente a la solución.
-        solution: Solución a visualizar.
-        days: Días específicos a graficar. Si es None, se grafican todos.
-        title: Título global de la figura. Si es None, se genera automáticamente.
-
-    Returns:
-        Figura matplotlib con un subplot por día.
-    """
     if days is None:
         days = list(range(1, instance.horizon + 1))
 
@@ -268,7 +198,6 @@ def plot_solution(
     )
     axes_flat = axes.flatten()
 
-    # Coordenadas de todos los clientes para dibujarlos como fondo
     cust_x = [c.x for c in instance.customers]
     cust_y = [c.y for c in instance.customers]
     cust_by_id = {c.id: c for c in instance.customers}
@@ -276,17 +205,14 @@ def plot_solution(
     for i, day in enumerate(days):
         ax = axes_flat[i]
 
-        # Fondo: todos los clientes (gris claro)
         ax.scatter(cust_x, cust_y, color="lightgray", s=30, zorder=1)
 
-        # Depósito
         ax.scatter(
             [instance.depot.x], [instance.depot.y],
             marker="s", color="red", s=140,
             edgecolors="black", linewidths=1.2, zorder=5,
         )
 
-        # Rutas del día
         day_routes = solution.routes_by_day(day)
         color = _day_color(day)
 
@@ -303,7 +229,6 @@ def plot_solution(
                     coords_y.append(cust.y)
 
             ax.plot(coords_x, coords_y, "-", color=color, linewidth=1.5, zorder=2)
-            # Resaltar clientes visitados ese día
             visited_x = [coords_x[k] for k in range(len(r.nodes)) if r.nodes[k] != 0]
             visited_y = [coords_y[k] for k in range(len(r.nodes)) if r.nodes[k] != 0]
             ax.scatter(
@@ -317,7 +242,6 @@ def plot_solution(
         ax.set_aspect("equal", adjustable="datalim")
         ax.grid(True, alpha=0.3)
 
-    # Ocultar subplots no usados
     for j in range(n_days, len(axes_flat)):
         axes_flat[j].axis("off")
 

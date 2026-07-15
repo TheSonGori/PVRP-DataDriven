@@ -1,22 +1,12 @@
 """
-Operadores de vecindad para el VNS aplicado al PVRP.
+Operadores de vecindad usados por la búsqueda local del VNS. Cada uno actúa
+dentro de un mismo día (no cambian la asignación de patrones) y devuelve una
+nueva Solution con la primera mejora encontrada, o None si no hay ninguna.
 
-Cada operador toma una `Solution` y produce una nueva `Solution` (o `None`
-si no hay mejora). Los operadores actúan **dentro de un mismo día**, es
-decir, no modifican la asignación de patrones; solo redistribuyen visitas
-entre rutas del mismo día.
-
-Operadores implementados (estructuras de vecindad):
-
-    1. swap_within_route     : intercambia dos clientes dentro de la misma ruta.
-    2. swap_between_routes   : intercambia un cliente de una ruta con uno de otra
-                               (mismo día).
-    3. relocate_between_routes: mueve un cliente de una ruta a otra.
-    4. two_opt_within_route  : invierte un segmento contiguo de una ruta.
-
-Cada operador retorna una nueva solución mejorada si encuentra un movimiento
-que reduce el costo total respetando la capacidad de los vehículos, o `None`
-si no hay mejora factible.
+Entrada: una Solution actual, la Instance, la matriz de distancias y el mapa
+id->índice (src/utils/solution.py, src/utils/distance.py).
+Salida: una nueva Solution con menor costo total, o None si el operador no
+encuentra ningún movimiento factible que mejore el costo.
 """
 
 from __future__ import annotations
@@ -30,59 +20,45 @@ from src.data.instance import Instance
 from src.utils.solution import Route, Solution
 
 
+# Costo de una ruta dada como lista de IDs (incluye los depósitos 0).
 def _route_cost_from_nodes(
     nodes: List[int],
     matrix: np.ndarray,
     id_to_idx: dict,
 ) -> float:
-    """Costo de una ruta dada como lista de IDs (incluye depósitos 0)."""
     cost = 0.0
     for i in range(len(nodes) - 1):
         cost += matrix[id_to_idx[nodes[i]], id_to_idx[nodes[i + 1]]]
     return cost
 
 
+# Demanda total de los clientes en una ruta.
 def _route_load(nodes: List[int], instance: Instance) -> float:
-    """Demanda total de los clientes en una ruta."""
     return sum(
         instance.get_customer(c).demand for c in nodes if c != 0
     )
 
 
-# =============================================================================
-#  Operador 1: 2-opt dentro de una ruta
-# =============================================================================
-
+# 2-opt: invierte segmentos contiguos de cada ruta buscando reducir su distancia.
 def two_opt_within_route(
     solution: Solution,
     instance: Instance,
     matrix: np.ndarray,
     id_to_idx: dict,
 ) -> Optional[Solution]:
-    """
-    Aplica 2-opt a cada ruta: invierte segmentos contiguos buscando reducción
-    de distancia. Es el operador clásico para mejorar el orden de visita
-    dentro de una ruta.
-
-    Retorna la primera mejora encontrada (estrategia *first improvement*).
-    """
     for r_idx, route in enumerate(solution.routes):
         nodes = route.nodes
         n = len(nodes)
         if n < 5:
-            # 2-opt requiere al menos 3 clientes para tener efecto
-            # (rutas como [0, A, B, 0] no se mejoran).
             continue
 
         original_cost = _route_cost_from_nodes(nodes, matrix, id_to_idx)
 
         for i in range(1, n - 2):
             for j in range(i + 1, n - 1):
-                # Invertir el segmento nodes[i:j+1]
                 new_nodes = nodes[:i] + nodes[i:j + 1][::-1] + nodes[j + 1:]
                 new_cost = _route_cost_from_nodes(new_nodes, matrix, id_to_idx)
                 if new_cost < original_cost - 1e-9:
-                    # Mejora encontrada: construir nueva solución
                     new_sol = copy.deepcopy(solution)
                     new_sol.routes[r_idx] = Route(
                         day=route.day,
@@ -93,20 +69,13 @@ def two_opt_within_route(
     return None
 
 
-# =============================================================================
-#  Operador 2: swap dentro de una ruta
-# =============================================================================
-
+# Intercambia dos clientes dentro de la misma ruta.
 def swap_within_route(
     solution: Solution,
     instance: Instance,
     matrix: np.ndarray,
     id_to_idx: dict,
 ) -> Optional[Solution]:
-    """
-    Intercambia dos clientes dentro de la misma ruta. Es un movimiento más
-    local que 2-opt y a veces escapa de óptimos locales del 2-opt.
-    """
     for r_idx, route in enumerate(solution.routes):
         nodes = route.nodes
         n = len(nodes)
@@ -131,20 +100,13 @@ def swap_within_route(
     return None
 
 
-# =============================================================================
-#  Operador 3: relocate entre rutas (mismo día)
-# =============================================================================
-
+# Mueve un cliente de una ruta a otra del mismo día, sin violar capacidad.
 def relocate_between_routes(
     solution: Solution,
     instance: Instance,
     matrix: np.ndarray,
     id_to_idx: dict,
 ) -> Optional[Solution]:
-    """
-    Mueve un cliente de una ruta a otra (del mismo día), verificando que la
-    capacidad no se viole. Útil para reequilibrar cargas entre vehículos.
-    """
     days = sorted(set(r.day for r in solution.routes))
 
     for day in days:
@@ -163,7 +125,6 @@ def relocate_between_routes(
                 customer_id = src_nodes[pos_src]
                 customer_demand = instance.get_customer(customer_id).demand
 
-                # Probar insertar en cada otra ruta del mismo día
                 for dst_idx in routes_day_idx:
                     if dst_idx == src_idx:
                         continue
@@ -173,7 +134,6 @@ def relocate_between_routes(
 
                     dst_cost = _route_cost_from_nodes(dst.nodes, matrix, id_to_idx)
 
-                    # Probar todas las posiciones de inserción
                     for pos_dst in range(1, len(dst.nodes)):
                         new_src_nodes = src_nodes[:pos_src] + src_nodes[pos_src + 1:]
                         new_dst_nodes = (
@@ -185,7 +145,6 @@ def relocate_between_routes(
                         new_dst_cost = _route_cost_from_nodes(new_dst_nodes, matrix, id_to_idx)
                         delta = (new_src_cost + new_dst_cost) - (src_cost + dst_cost)
                         if delta < -1e-9:
-                            # Crear nueva solución; eliminar rutas vacías.
                             new_sol = copy.deepcopy(solution)
                             new_sol.routes[src_idx] = Route(
                                 day=src.day,
@@ -197,7 +156,6 @@ def relocate_between_routes(
                                 vehicle_id=dst.vehicle_id,
                                 nodes=new_dst_nodes,
                             )
-                            # Si la ruta origen quedó vacía ([0, 0]), eliminarla.
                             new_sol.routes = [
                                 r for r in new_sol.routes
                                 if len(r.nodes) > 2
@@ -206,18 +164,13 @@ def relocate_between_routes(
     return None
 
 
+# Intercambia un cliente de una ruta con un cliente de otra ruta del mismo día.
 def swap_between_routes(
     solution: Solution,
     instance: Instance,
     matrix: np.ndarray,
     id_to_idx: dict,
 ) -> Optional[Solution]:
-    """
-    Intercambia un cliente de una ruta con un cliente de otra ruta del mismo día.
-
-    Más potente que `relocate` porque considera intercambios bidireccionales y
-    a menudo encuentra mejoras que `relocate` y `2-opt` no detectan.
-    """
     days = sorted(set(r.day for r in solution.routes))
 
     for day in days:
@@ -244,7 +197,6 @@ def swap_between_routes(
                         d_a = instance.get_customer(c_a).demand
                         d_b = instance.get_customer(c_b).demand
 
-                        # Verificar capacidad después del intercambio
                         if (load_a - d_a + d_b > instance.capacity or
                             load_b - d_b + d_a > instance.capacity):
                             continue
@@ -272,10 +224,7 @@ def swap_between_routes(
     return None
 
 
-# =============================================================================
-#  Lista de operadores en el orden de aplicación del VNS
-# =============================================================================
-
+# Orden de aplicación de los operadores en la búsqueda local del VNS.
 NEIGHBORHOOD_OPERATORS = [
     ("2-opt", two_opt_within_route),
     ("swap_within", swap_within_route),

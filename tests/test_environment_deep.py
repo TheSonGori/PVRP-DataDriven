@@ -1,13 +1,11 @@
 """
-Tests profundos del entorno PVRP (Día 6).
+Tests de propiedades de alto nivel de PVRPEnv: invariantes durante el
+episodio (capacidad, frecuencia, visitas por día), determinismo bajo la
+misma semilla, funcionamiento sobre múltiples instancias, y coherencia entre
+el costo de la solución y la suma de costos por ruta.
 
-Estos tests cierran la Fase B verificando propiedades de alto nivel que
-garantizan la corrección del entorno:
-
-    - Invariantes durante el episodio (capacidad, día, frecuencia).
-    - Determinismo bajo misma semilla.
-    - Funcionamiento sobre múltiples instancias del dataset.
-    - Coherencia entre la solución del entorno y el costo reportado.
+Entrada: instancias del dataset (data/raw/*.txt) presentes en disco.
+Salida: aserciones pytest; no retorna valores.
 """
 
 from __future__ import annotations
@@ -23,8 +21,6 @@ from src.environment.pvrp_env import PVRPEnv
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "raw"
 
-# Instancias representativas de cada escala (pequeña, mediana, grande).
-# Solo se prueban las que estén físicamente disponibles en data/raw/.
 _CANDIDATE_INSTANCES = ["p01", "p02", "p04", "p07", "p23"]
 SAMPLE_INSTANCES = [
     name for name in _CANDIDATE_INSTANCES
@@ -32,8 +28,8 @@ SAMPLE_INSTANCES = [
 ]
 
 
+# Ejecuta un episodio con política aleatoria respetando la máscara; devuelve si terminó.
 def _run_random_episode(env: PVRPEnv, seed: int = 0, max_steps: int = 5000):
-    """Ejecuta un episodio con política aleatoria respetando la máscara."""
     env.reset(seed=seed)
     rng = np.random.default_rng(seed)
     for _ in range(max_steps):
@@ -46,13 +42,10 @@ def _run_random_episode(env: PVRPEnv, seed: int = 0, max_steps: int = 5000):
     return False
 
 
-# =============================================================================
-#  Invariantes durante el episodio
-# =============================================================================
-
 class TestInvariants:
+
+    # La capacidad restante nunca es negativa a lo largo de un episodio.
     def test_capacity_never_negative(self):
-        """La capacidad restante nunca puede ser negativa."""
         instance = load_instance(DATA_DIR / "p01.txt")
         env = PVRPEnv(instance, seed=0)
         env.reset()
@@ -70,8 +63,8 @@ class TestInvariants:
             if env._is_episode_done():
                 break
 
+    # Ningún cliente recibe más visitas que su frecuencia requerida.
     def test_visits_never_exceed_frequency(self):
-        """Ningún cliente recibe más visitas que su frecuencia requerida."""
         instance = load_instance(DATA_DIR / "p01.txt")
         env = PVRPEnv(instance, seed=0)
         env.reset()
@@ -90,8 +83,8 @@ class TestInvariants:
             if env._is_episode_done():
                 break
 
+    # Un cliente no puede ser visitado dos veces el mismo día.
     def test_no_duplicate_day_visits(self):
-        """Un cliente no puede ser visitado dos veces el mismo día."""
         instance = load_instance(DATA_DIR / "p01.txt")
         env = PVRPEnv(instance, seed=0)
         env.reset()
@@ -110,13 +103,10 @@ class TestInvariants:
                 break
 
 
-# =============================================================================
-#  Determinismo
-# =============================================================================
-
 class TestDeterminism:
+
+    # Dos episodios con la misma semilla y política producen la misma trayectoria y costo.
     def test_same_seed_same_trajectory(self):
-        """Dos episodios con misma semilla y misma política producen la misma trayectoria."""
         instance = load_instance(DATA_DIR / "p01.txt")
 
         def run(seed):
@@ -140,21 +130,19 @@ class TestDeterminism:
         assert cost_1 == cost_2
 
 
-# =============================================================================
-#  Múltiples instancias
-# =============================================================================
-
 class TestMultipleInstances:
+
+    # El episodio termina en un número finito de pasos en cada instancia de muestra.
     @pytest.mark.parametrize("name", SAMPLE_INSTANCES)
     def test_episode_terminates_on_instance(self, name):
         instance = load_instance(DATA_DIR / f"{name}.txt")
         env = PVRPEnv(instance, seed=0)
-        # Más pasos para instancias grandes
         max_steps = 50 * instance.num_customers
         assert _run_random_episode(env, seed=0, max_steps=max_steps), (
             f"Episodio en {name} no terminó."
         )
 
+    # La solución resultante no viola restricciones locales de capacidad ni de patrón.
     @pytest.mark.parametrize("name", SAMPLE_INSTANCES)
     def test_solution_local_constraints_on_instance(self, name):
         instance = load_instance(DATA_DIR / f"{name}.txt")
@@ -164,25 +152,16 @@ class TestMultipleInstances:
 
         sol = env.get_solution()
         _, violations = sol.is_feasible(instance)
-        # Como en Día 5: pueden quedar visitas pendientes pero NO violaciones
-        # de capacidad ni patrones inválidos.
         for v in violations:
             assert "capacidad" not in v.lower()
             assert "patrón de visitas" not in v.lower()
 
 
-# =============================================================================
-#  Coherencia costo / acumulación de distancias
-# =============================================================================
-
 class TestCostCoherence:
+
+    # El costo total de Solution coincide con la suma manual de costos por ruta.
     @pytest.mark.parametrize("name", SAMPLE_INSTANCES)
     def test_solution_cost_matches_route_cost_sum(self, name):
-        """
-        El costo de la solución (calculado por `Solution.total_cost`) debe ser
-        idéntico a la suma de costos de cada ruta calculada independientemente.
-        Esto verifica que el cálculo de costo es consistente.
-        """
         instance = load_instance(DATA_DIR / f"{name}.txt")
         env = PVRPEnv(instance, seed=0)
         max_steps = 50 * instance.num_customers
@@ -191,7 +170,6 @@ class TestCostCoherence:
         sol = env.get_solution()
         total = sol.total_cost(instance)
 
-        # Suma manual ruta por ruta
         from src.utils.distance import build_distance_matrix, build_id_to_index_map
         matrix = build_distance_matrix(instance)
         id_to_idx = build_id_to_index_map(instance)

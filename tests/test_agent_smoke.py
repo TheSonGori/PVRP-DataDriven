@@ -1,16 +1,10 @@
 """
-Test de humo del entrenamiento del agente PPO (Día 10).
+Test de humo del entrenamiento del agente PPO: no verifica calidad, solo que
+el pipeline completo (entorno + ActionMasker + MaskablePPO + guardado/carga +
+predicción) funcione de punta a punta sin errores.
 
-NO verifica calidad del agente, solo que el pipeline completo funcione:
-
-    - Crear entorno envuelto en ActionMasker.
-    - Instanciar MaskablePPO.
-    - Ejecutar un breve entrenamiento sin errores.
-    - Cargar/guardar el modelo.
-    - Predecir una acción válida y ejecutarla en el entorno.
-
-Si este test pasa, todas las piezas (entorno, máscara, modelo, librería)
-están conectadas correctamente.
+Entrada: la instancia p01 (data/raw/p01.txt) y SMOKE_TEST_CONFIG.
+Salida: aserciones pytest; no retorna valores.
 """
 
 from __future__ import annotations
@@ -28,15 +22,15 @@ DATA_DIR = Path(__file__).parent.parent / "data" / "raw"
 
 
 class TestPipelineConnectivity:
-    """Verifica que cada componente del pipeline se enlaza correctamente."""
 
+    # build_env() expone espacios de observación/acción coherentes con la instancia.
     def test_build_env_returns_wrapped_env(self):
         instance = load_instance(DATA_DIR / "p01.txt")
         env = build_env(instance, seed=0)
-        # ActionMasker expone los mismos espacios que el entorno base
         assert env.observation_space.shape[0] > 0
         assert env.action_space.n == instance.num_customers + 1
 
+    # El entorno envuelto expone action_masks() con el tamaño esperado.
     def test_env_has_action_masks_method(self):
         instance = load_instance(DATA_DIR / "p01.txt")
         env = build_env(instance, seed=0)
@@ -46,19 +40,15 @@ class TestPipelineConnectivity:
 
 
 class TestSmokeTraining:
-    """
-    Test de humo del entrenamiento. Es lento (~5-10 segundos) por lo que
-    usamos la configuración mínima `SMOKE_TEST_CONFIG`.
-    """
 
+    # Un entrenamiento breve con SMOKE_TEST_CONFIG completa sin errores.
     def test_train_completes_without_errors(self):
         instance = load_instance(DATA_DIR / "p01.txt")
         model = train_agent(instance, config=SMOKE_TEST_CONFIG)
         assert model is not None
 
+    # Tras entrenar, el agente predice una acción válida según la máscara.
     def test_trained_agent_can_predict(self):
-        """Tras un breve entrenamiento, el agente puede predecir acciones
-        válidas usando la máscara."""
         instance = load_instance(DATA_DIR / "p01.txt")
         model = train_agent(instance, config=SMOKE_TEST_CONFIG)
         env = build_env(instance, seed=0)
@@ -68,11 +58,10 @@ class TestSmokeTraining:
         action, _ = model.predict(
             obs, action_masks=mask, deterministic=True
         )
-        # La acción predicha debe ser una de las válidas según la máscara
         assert mask[int(action)] == True
 
+    # El agente entrenado completa un episodio del PVRP sin crashear.
     def test_trained_agent_completes_episode(self):
-        """El agente debe poder completar un episodio del PVRP sin crashear."""
         instance = load_instance(DATA_DIR / "p01.txt")
         model = train_agent(instance, config=SMOKE_TEST_CONFIG)
         env = build_env(instance, seed=0)
@@ -90,16 +79,14 @@ class TestSmokeTraining:
 
         assert terminated, "Episodio no terminó en 5000 pasos"
 
+    # El modelo entrenado se guarda a disco y, al recargarlo, predice la misma acción.
     def test_save_and_load_model(self, tmp_path):
-        """El modelo entrenado se guarda y se puede recargar."""
         instance = load_instance(DATA_DIR / "p01.txt")
         save_path = tmp_path / "test_model"
 
         model_a = train_agent(instance, config=SMOKE_TEST_CONFIG, save_path=save_path)
-        # MaskablePPO añade ".zip" automáticamente al guardar
         assert (tmp_path / "test_model.zip").exists()
 
-        # Recargar y verificar que predice
         from sb3_contrib import MaskablePPO
         model_b = MaskablePPO.load(str(save_path))
 

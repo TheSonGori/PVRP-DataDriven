@@ -1,23 +1,13 @@
 """
-Evaluación sistemática del agente PVRP-RL.
+Evaluación del agente PVRP-RL: corrida determinística (política argmax),
+corrida estocástica (N muestreos, se conserva la mejor solución factible), y
+comparación homogénea entre Greedy, VNS y el agente RL sobre la misma
+instancia, incluyendo el gap contra la BKS cuando existe el .res.
 
-Este módulo centraliza toda la lógica de evaluación, separándola del
-entrenamiento. Provee tres niveles de evaluación:
-
-    1. evaluate_deterministic : una corrida con política determinística
-       (argmax sobre la política). Reproducible; es el "resultado oficial"
-       del agente.
-
-    2. evaluate_stochastic    : N corridas muestreando de la política. Como
-       PPO aprende una política estocástica, muestrear varias veces y quedarse
-       con la mejor suele mejorar el resultado. Reporta media, desviación,
-       mejor y peor.
-
-    3. compare_methods        : ejecuta Greedy, VNS y el agente RL sobre la
-       misma instancia y arma una tabla comparativa homogénea, incluyendo
-       el gap respecto a la BKS cuando está disponible.
-
-Estas funciones alimentan las tablas y figuras de los Capítulos 4 y 5.
+Entrada: un modelo MaskablePPO entrenado y una Instance (o, para
+compare_methods, además un directorio con archivos .res).
+Salida: EvalResult / StochasticEvalResult con costo, factibilidad, rutas,
+tiempo y gap; o un dict con los resultados de los tres métodos.
 """
 
 from __future__ import annotations
@@ -37,15 +27,15 @@ from src.data.solution_loader import load_solution
 from src.utils.solution import Solution
 
 
+# Resultado de evaluar un método (una corrida) sobre una instancia.
 @dataclass
 class EvalResult:
-    """Resultado de evaluar un método sobre una instancia."""
     method: str
     cost: float
     feasible: bool
     num_routes: int
     elapsed_time: float
-    gap_pct: Optional[float] = None  # respecto a la BKS, si se conoce
+    gap_pct: Optional[float] = None
 
     def __str__(self) -> str:
         gap = f"{self.gap_pct:+.1f}%" if self.gap_pct is not None else "N/A"
@@ -56,9 +46,9 @@ class EvalResult:
         )
 
 
+# Resultado de evaluar el agente con N muestreos estocásticos de la política.
 @dataclass
 class StochasticEvalResult:
-    """Resultado de evaluar el agente con N muestreos estocásticos."""
     method: str
     best_cost: float
     mean_cost: float
@@ -79,8 +69,8 @@ class StochasticEvalResult:
         )
 
 
+# Ejecuta un episodio completo con el modelo dado y devuelve la solución construida.
 def _run_episode(model, env, deterministic: bool, max_steps: int = 5000) -> Solution:
-    """Ejecuta un episodio completo y retorna la solución construida."""
     obs, _ = env.reset()
     terminated = False
     steps = 0
@@ -94,8 +84,8 @@ def _run_episode(model, env, deterministic: bool, max_steps: int = 5000) -> Solu
     return env.unwrapped.get_solution()
 
 
+# Carga el costo de la BKS desde el .res correspondiente, si existe.
 def _bks_cost(instance: Instance, data_dir: Path) -> Optional[float]:
-    """Carga el costo de la BKS si el archivo .res existe."""
     bks_path = data_dir / f"{instance.name}.res"
     if bks_path.exists():
         try:
@@ -105,24 +95,13 @@ def _bks_cost(instance: Instance, data_dir: Path) -> Optional[float]:
     return None
 
 
+# Evalúa el agente con política determinística (una sola corrida, resultado oficial).
 def evaluate_deterministic(
     model,
     instance: Instance,
     seed: int = 42,
     bks_cost: Optional[float] = None,
 ) -> EvalResult:
-    """
-    Evalúa el agente con política determinística (una sola corrida).
-
-    Args:
-        model: Modelo MaskablePPO entrenado.
-        instance: Instancia del PVRP.
-        seed: Semilla del entorno.
-        bks_cost: Costo de la BKS para calcular gap (opcional).
-
-    Returns:
-        Un `EvalResult`.
-    """
     env = build_env(instance, seed=seed)
     start = time.time()
     sol = _run_episode(model, env, deterministic=True)
@@ -142,6 +121,7 @@ def evaluate_deterministic(
     )
 
 
+# Evalúa el agente muestreando la política N veces y se queda con la mejor solución factible.
 def evaluate_stochastic(
     model,
     instance: Instance,
@@ -149,24 +129,6 @@ def evaluate_stochastic(
     base_seed: int = 1000,
     bks_cost: Optional[float] = None,
 ) -> StochasticEvalResult:
-    """
-    Evalúa el agente muestreando la política N veces, quedándose con la mejor
-    solución factible.
-
-    Como PPO aprende una política estocástica, muestrear varias trayectorias
-    y elegir la mejor es una estrategia estándar que suele superar a la
-    evaluación determinística sin costo de reentrenamiento.
-
-    Args:
-        model: Modelo MaskablePPO entrenado.
-        instance: Instancia del PVRP.
-        n_runs: Número de muestreos.
-        base_seed: Semilla base (cada corrida usa base_seed + i).
-        bks_cost: Costo de la BKS para calcular gap (opcional).
-
-    Returns:
-        Un `StochasticEvalResult` con estadísticas agregadas.
-    """
     costs: list[float] = []
     feasibles: list[bool] = []
     best_cost = float("inf")
@@ -182,13 +144,11 @@ def evaluate_stochastic(
         costs.append(cost)
         feasibles.append(feasible)
 
-        # Nos quedamos con la mejor solución FACTIBLE.
         if feasible and cost < best_cost:
             best_cost = cost
             best_solution = sol
     elapsed = time.time() - start
 
-    # Si ninguna corrida fue factible, reportamos el mejor costo igualmente.
     if best_solution is None:
         best_cost = min(costs)
 
@@ -209,10 +169,10 @@ def evaluate_stochastic(
     )
 
 
+# Evalúa la heurística Greedy sobre la instancia.
 def evaluate_greedy(
     instance: Instance, bks_cost: Optional[float] = None
 ) -> EvalResult:
-    """Evalúa la heurística Greedy sobre la instancia."""
     start = time.time()
     sol = greedy_solve(instance)
     elapsed = time.time() - start
@@ -229,13 +189,13 @@ def evaluate_greedy(
     )
 
 
+# Evalúa el VNS sobre la instancia.
 def evaluate_vns(
     instance: Instance,
     max_iterations: int = 100,
     seed: int = 42,
     bks_cost: Optional[float] = None,
 ) -> EvalResult:
-    """Evalúa el VNS sobre la instancia."""
     start = time.time()
     result = vns_solve(instance, max_iterations=max_iterations, seed=seed)
     elapsed = time.time() - start
@@ -253,6 +213,7 @@ def evaluate_vns(
     )
 
 
+# Ejecuta Greedy, VNS y el agente RL (determinístico + estocástico) sobre la misma instancia.
 def compare_methods(
     model,
     instance: Instance,
@@ -260,19 +221,6 @@ def compare_methods(
     n_stochastic_runs: int = 20,
     vns_iterations: int = 100,
 ) -> dict:
-    """
-    Ejecuta los tres métodos sobre la misma instancia y arma una comparación.
-
-    Args:
-        model: Agente RL entrenado.
-        instance: Instancia del PVRP.
-        data_dir: Carpeta con los archivos .res (para la BKS).
-        n_stochastic_runs: Muestreos para la evaluación estocástica del RL.
-        vns_iterations: Iteraciones del VNS.
-
-    Returns:
-        Diccionario con los resultados de cada método y la BKS.
-    """
     bks = _bks_cost(instance, data_dir)
 
     results = {
@@ -287,8 +235,8 @@ def compare_methods(
     return results
 
 
+# Imprime una tabla comparativa legible de los resultados de compare_methods.
 def print_comparison(results: dict, instance_name: str) -> None:
-    """Imprime una tabla comparativa legible de los resultados."""
     print(f"\n{'='*70}")
     print(f"  COMPARACIÓN DE MÉTODOS — instancia {instance_name}")
     print(f"{'='*70}")

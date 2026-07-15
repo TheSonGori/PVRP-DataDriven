@@ -1,11 +1,10 @@
 """
-Tests del VNS (Día 8 — estructura base).
+Tests del VNS: mejora (o iguala) la solución inicial de Greedy, produce
+soluciones factibles, es determinístico y respeta el tope de tiempo.
 
-Verifican que el VNS:
-    - Mejora (o iguala) la solución inicial de Greedy.
-    - Produce soluciones factibles si la inicial era factible.
-    - Es determinístico.
-    - Termina en tiempo razonable.
+Entrada: instancias del dataset (data/raw/p01.txt, p23.txt) y su BKS
+(p01.res).
+Salida: aserciones pytest; no retorna valores.
 """
 
 from __future__ import annotations
@@ -30,7 +29,6 @@ SAMPLE_INSTANCES = [
 
 
 class TestVNSP01:
-    """Tests específicos sobre p01."""
 
     @pytest.fixture(scope="class")
     def setup(self):
@@ -38,30 +36,31 @@ class TestVNSP01:
         result = vns_solve(instance, max_iterations=50, seed=0, verbose=False)
         return instance, result
 
+    # La solución del VNS sobre p01 es factible.
     def test_solution_is_feasible(self, setup):
         instance, result = setup
         feasible, violations = result.solution.is_feasible(instance)
         assert feasible, f"VNS infactible en p01: {violations[:3]}"
 
+    # El VNS mejora sustancialmente sobre Greedy puro (sin búsqueda local) en p01.
     def test_improves_over_pure_greedy(self, setup):
-        """El VNS (con búsqueda local + shaking) debe mejorar sustancialmente
-        sobre Greedy puro (sin LS) en p01."""
         from src.baselines.greedy import greedy_solve
         instance, result = setup
         pure_greedy_cost = greedy_solve(instance).total_cost(instance)
-        # Greedy puro en p01 ~ 893; VNS debería estar bastante por debajo.
         assert result.final_cost < pure_greedy_cost * 0.95, (
             f"VNS={result.final_cost:.2f} debería ser <95% de Greedy={pure_greedy_cost:.2f}"
         )
 
+    # El VNS no puede superar (ser mejor que) la BKS.
     def test_better_than_bks_lower_bound(self, setup):
-        """VNS no puede ser mejor que la BKS."""
         instance, result = setup
         bks = load_solution(DATA_DIR / "p01.res")
         assert result.final_cost >= bks.reported_cost - 0.5
 
 
 class TestVNSMultipleInstances:
+
+    # El VNS produce una solución factible en cada instancia de muestra.
     @pytest.mark.parametrize("name", SAMPLE_INSTANCES)
     def test_produces_feasible_on(self, name):
         instance = load_instance(DATA_DIR / f"{name}.txt")
@@ -71,8 +70,9 @@ class TestVNSMultipleInstances:
 
 
 class TestVNSDeterminism:
+
+    # El VNS con la misma semilla produce siempre el mismo costo final.
     def test_same_seed_same_result(self):
-        """VNS con la misma semilla debe ser determinístico."""
         instance = load_instance(DATA_DIR / "p01.txt")
         r1 = vns_solve(instance, max_iterations=30, seed=42, verbose=False)
         r2 = vns_solve(instance, max_iterations=30, seed=42, verbose=False)
@@ -80,12 +80,11 @@ class TestVNSDeterminism:
 
 
 class TestVNSTimeLimit:
+
+    # Con un time_limit, el VNS termina en un tiempo acorde (con margen de tolerancia).
     def test_respects_time_limit(self):
-        """Si pasamos un time_limit, VNS termina aproximadamente en tiempo."""
         instance = load_instance(DATA_DIR / "p01.txt")
         result = vns_solve(
             instance, max_iterations=10000, time_limit=2.0, seed=0, verbose=False
         )
-        # Pequeña tolerancia: una iteración puede tardar varios segundos en
-        # instancias grandes y el chequeo de tiempo ocurre al inicio del bucle.
         assert result.elapsed_time < 10.0

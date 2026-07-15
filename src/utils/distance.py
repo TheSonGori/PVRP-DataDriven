@@ -1,10 +1,10 @@
 """
-Cálculo de distancias y construcción de la matriz de costos para una instancia
-del PVRP.
+Cálculo de distancias euclidianas y construcción de la matriz de costos entre
+nodos (depósito + clientes) de una instancia del PVRP.
 
-La distancia entre dos nodos se asume euclidiana, consistente con la convención
-de las instancias del NEO Research Group y con el modelo matemático presentado
-en la Sección 1.5.2 de la memoria (costo c_ij del arco (i, j)).
+Entrada: una Instance (src/data/instance.py) o pares de coordenadas (x, y).
+Salida: distancias escalares, una matriz numpy (n_nodes x n_nodes) de
+distancias, o un diccionario que mapea customer_id -> índice de matriz.
 """
 
 from __future__ import annotations
@@ -17,42 +17,15 @@ import numpy as np
 from src.data.instance import Instance
 
 
+# Distancia euclidiana entre dos puntos (x, y).
 def euclidean_distance(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
-    """
-    Calcula la distancia euclidiana entre dos puntos del plano.
-
-    Args:
-        p1: Coordenadas (x, y) del primer punto.
-        p2: Coordenadas (x, y) del segundo punto.
-
-    Returns:
-        Distancia euclidiana no negativa.
-    """
     dx = p1[0] - p2[0]
     dy = p1[1] - p2[1]
     return math.sqrt(dx * dx + dy * dy)
 
 
+# Construye la matriz (n_nodes x n_nodes) de distancias entre depósito y clientes.
 def build_distance_matrix(instance: Instance) -> np.ndarray:
-    """
-    Construye la matriz de distancias euclidianas entre todos los nodos de una
-    instancia.
-
-    La matriz resultante tiene dimensión (n+1) x (n+1), donde n es el número
-    de clientes. El índice 0 corresponde al depósito y los índices 1 a n
-    corresponden a los clientes en el orden en que aparecen en
-    `instance.customers`.
-
-    IMPORTANTE: el índice en la matriz NO necesariamente coincide con el `id`
-    del cliente. Para mapear entre índice de matriz e ID de cliente, usar
-    `build_id_to_index_map`.
-
-    Args:
-        instance: Instancia del PVRP.
-
-    Returns:
-        Matriz cuadrada simétrica de distancias con ceros en la diagonal.
-    """
     n_nodes = instance.num_nodes
     matrix = np.zeros((n_nodes, n_nodes), dtype=np.float64)
 
@@ -67,21 +40,8 @@ def build_distance_matrix(instance: Instance) -> np.ndarray:
     return matrix
 
 
+# Construye el mapeo {customer_id: índice en la matriz de distancias} (depósito = 0).
 def build_id_to_index_map(instance: Instance) -> dict:
-    """
-    Construye un mapeo entre el ID del cliente y su índice en la matriz de
-    distancias.
-
-    El depósito tiene siempre índice 0. Los clientes se indexan en el orden
-    en que aparecen en `instance.customers`.
-
-    Args:
-        instance: Instancia del PVRP.
-
-    Returns:
-        Diccionario {customer_id: matrix_index}. El depósito se mapea con
-        la clave 0 al índice 0.
-    """
     mapping = {0: 0}
     for idx, customer in enumerate(instance.customers, start=1):
         mapping[customer.id] = idx

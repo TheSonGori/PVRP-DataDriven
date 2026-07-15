@@ -1,13 +1,12 @@
 """
-Análisis multi-semilla del agente PVRP-RL (Día 14, Fase E).
+Entrena y evalúa el agente PVRP-RL una vez por cada semilla dada y agrega
+los resultados (media ± desviación de costo y gap, tasa de factibilidad),
+ya que el rendimiento de PPO depende de la semilla de inicialización.
 
-Entrena el agente varias veces con semillas distintas y agrega los
-resultados. PPO es estocástico: su rendimiento depende de la semilla de
-inicialización. Reportar media ± desviación sobre N semillas, en lugar de
-un único número, es la forma estadísticamente honesta de caracterizar al
-agente y de sustentar que superar a los baselines no fue casualidad.
-
-Alimenta la tabla consolidada del Capítulo 4 (Validación de la solución).
+Entrada: una Instance, una lista de semillas, un PPOConfig base y,
+opcionalmente, el costo de la BKS y un directorio donde guardar cada modelo.
+Salida: un MultiSeedResult con una SeedRun por semilla y las estadísticas
+agregadas (gap_mean/std/min/max, cost_mean/std, feasibility_rate).
 """
 
 from __future__ import annotations
@@ -25,9 +24,9 @@ from src.agent.train import train_agent
 from src.data.instance import Instance
 
 
+# Resultado de una única corrida (una semilla): costo, factibilidad, gap y tiempo de entrenamiento.
 @dataclass
 class SeedRun:
-    """Resultado de una única corrida (una semilla)."""
     seed: int
     cost: float
     feasible: bool
@@ -36,15 +35,14 @@ class SeedRun:
     train_time: float
 
 
+# Resultado agregado sobre todas las semillas de una instancia.
 @dataclass
 class MultiSeedResult:
-    """Resultado agregado sobre todas las semillas."""
     instance_name: str
     n_seeds: int
     bks_cost: Optional[float]
     runs: list[SeedRun] = field(default_factory=list)
 
-    # --- Estadísticas de gap (solo sobre corridas factibles) ---
     @property
     def feasible_runs(self) -> list[SeedRun]:
         return [r for r in self.runs if r.feasible]
@@ -94,6 +92,7 @@ class MultiSeedResult:
         return float(c.std()) if c.size else None
 
 
+# Entrena y evalúa el agente una vez por cada semilla, devolviendo el resultado agregado.
 def run_multi_seed(
     instance: Instance,
     seeds: list[int],
@@ -102,22 +101,6 @@ def run_multi_seed(
     models_dir: Optional[Path] = None,
     verbose: bool = True,
 ) -> MultiSeedResult:
-    """
-    Entrena y evalúa el agente una vez por cada semilla.
-
-    Args:
-        instance: Instancia del PVRP.
-        seeds: Lista de semillas (p. ej. [0, 1, 2, 3, 4]).
-        base_config: Hiperparámetros base. La semilla se sobreescribe en
-            cada corrida con el valor correspondiente.
-        bks_cost: Costo de la BKS para el gap (opcional).
-        models_dir: Si se indica, guarda cada modelo como
-            ppo_{instancia}_seed{n}.zip para reutilizarlo después.
-        verbose: Imprime el progreso de cada semilla.
-
-    Returns:
-        Un `MultiSeedResult` con todas las corridas y sus estadísticas.
-    """
     result = MultiSeedResult(
         instance_name=instance.name,
         n_seeds=len(seeds),
@@ -128,7 +111,6 @@ def run_multi_seed(
         if verbose:
             print(f"\n[{i}/{len(seeds)}] Entrenando semilla {seed}...")
 
-        # Clonamos la config cambiando solo la semilla, sin mutar el original.
         config = replace(base_config, seed=seed)
 
         save_path = None
@@ -139,7 +121,6 @@ def run_multi_seed(
         model = train_agent(instance, config=config, save_path=save_path)
         train_time = time.time() - start
 
-        # Evaluación determinística (resultado oficial de esta semilla).
         ev = evaluate_deterministic(model, instance, bks_cost=bks_cost)
 
         run = SeedRun(
@@ -161,8 +142,8 @@ def run_multi_seed(
     return result
 
 
+# Imprime un resumen legible del análisis multi-semilla.
 def print_multi_seed(result: MultiSeedResult) -> None:
-    """Imprime un resumen legible del análisis multi-semilla."""
     print(f"\n{'='*64}")
     print(f"  ANÁLISIS MULTI-SEMILLA — instancia {result.instance_name}")
     print(f"  ({result.n_seeds} semillas)")

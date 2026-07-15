@@ -1,22 +1,12 @@
 """
-Operador de perturbación (shaking) para el VNS.
+Operador de perturbación (shaking) del VNS: rompe la solución actual de
+forma controlada intercambiando clientes entre rutas del mismo día, para que
+la búsqueda local pueda escapar de óptimos locales y converger a uno distinto.
 
-El shaking introduce diversificación rompiendo la solución actual de forma
-controlada, con el objetivo de escapar de óptimos locales. La idea clave:
-después del shaking, la búsqueda local (operadores de vecindad) puede
-converger a un óptimo local distinto y, con suerte, mejor.
-
-Estrategia implementada
------------------------
-
-Para cada nivel `k` de perturbación (1, 2, 3, ...):
-
-    - Seleccionar aleatoriamente `k` pares de rutas del mismo día.
-    - Para cada par, intercambiar dos clientes elegidos al azar.
-    - Si el intercambio viola capacidad, se intenta otro par.
-
-Niveles más altos = más perturbación. El bucle externo del VNS aumenta `k`
-gradualmente cuando no hay mejora, y lo reinicia a 1 cuando encuentra una.
+Entrada: una Solution, la Instance, un nivel de perturbación k y un
+generador aleatorio opcional.
+Salida: una nueva Solution perturbada (copia de la original si no se logra
+ningún intercambio válido).
 """
 
 from __future__ import annotations
@@ -29,26 +19,13 @@ from src.data.instance import Instance
 from src.utils.solution import Route, Solution
 
 
+# Realiza k intercambios aleatorios de clientes entre rutas del mismo día, respetando capacidad.
 def shake(
     solution: Solution,
     instance: Instance,
     k: int = 1,
     rng: Optional[random.Random] = None,
 ) -> Solution:
-    """
-    Perturba la solución actual realizando `k` intercambios aleatorios entre
-    rutas del mismo día.
-
-    Args:
-        solution: Solución a perturbar.
-        instance: Instancia del PVRP (para verificar capacidad).
-        k: Nivel de perturbación (número de intercambios a intentar).
-        rng: Generador aleatorio para reproducibilidad.
-
-    Returns:
-        Una nueva solución perturbada. Si no se logran intercambios válidos,
-        retorna una copia de la original.
-    """
     if rng is None:
         rng = random.Random()
 
@@ -56,7 +33,7 @@ def shake(
     days = sorted(set(r.day for r in new_sol.routes))
 
     swaps_done = 0
-    max_attempts = k * 10  # margen para intentos fallidos
+    max_attempts = k * 10
 
     for _ in range(max_attempts):
         if swaps_done >= k:
@@ -85,7 +62,6 @@ def shake(
             load_b - d_b + d_a > instance.capacity):
             continue
 
-        # Ejecutar el intercambio in-place
         r_a.nodes[pa], r_b.nodes[pb] = c_b, c_a
         swaps_done += 1
 

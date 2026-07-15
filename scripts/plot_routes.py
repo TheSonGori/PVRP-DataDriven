@@ -72,8 +72,6 @@ def main() -> int:
     out_rl = FIG_DIR / f"rutas_{args.instance}_RL.png"
     plot_solution(
         instance, sol_rl, save_path=out_rl,
-        suptitle=f"Agente RL — {args.instance}  "
-                 f"(costo {cost_rl:.1f}, {'factible' if feas else 'INFACTIBLE'})",
     )
     print(f"Figura RL guardada: {out_rl}")
 
@@ -85,8 +83,6 @@ def main() -> int:
             out_bks = FIG_DIR / f"rutas_{args.instance}_BKS.png"
             plot_solution(
                 instance, sol_bks, save_path=out_bks,
-                suptitle=f"Mejor solución conocida (BKS) — {args.instance}  "
-                         f"(costo {sol_bks.reported_cost:.1f})",
             )
             print(f"Figura BKS guardada: {out_bks}")
         else:

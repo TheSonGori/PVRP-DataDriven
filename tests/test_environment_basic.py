@@ -1,14 +1,10 @@
 """
-Tests básicos del entorno PVRPEnv (Día 4).
+Tests básicos de PVRPEnv: dimensiones de observación/acción, reset() con
+estado inicial coherente, step() con acción válida (visita) e inválida, y
+terminación del episodio.
 
-Estos tests verifican que:
-    - El entorno se crea con dimensiones correctas (observación y acción).
-    - `reset()` devuelve un estado inicial coherente.
-    - `step()` ejecuta acciones válidas (visitar cliente) y suma costos.
-    - `step()` con acción inválida devuelve penalización sin crashear.
-    - El episodio termina cuando se completan las visitas o se agota el horizonte.
-
-Los tests de máscara y recompensa final se agregan en el Día 5.
+Entrada: la instancia p01 (data/raw/p01.txt).
+Salida: aserciones pytest; no retorna valores.
 """
 
 from __future__ import annotations
@@ -32,74 +28,73 @@ def env():
     return PVRPEnv(instance, seed=42)
 
 
-# =============================================================================
-#  Espacios de observación y acción
-# =============================================================================
-
 class TestSpaces:
+
+    # La dimensión de observación es 4 globales + 50 clientes * 4 features = 204.
     def test_observation_dim(self, env):
-        # 4 globales + 50 clientes * 4 features = 204
         expected = NUM_GLOBAL_FEATURES + 50 * NUM_CUSTOMER_FEATURES
         assert env.observation_space.shape == (expected,)
 
+    # El espacio de acciones tiene 50 clientes + 1 acción de cierre = 51.
     def test_action_space(self, env):
-        # 50 clientes + 1 acción de cierre = 51 acciones posibles
         assert env.action_space.n == 51
 
+    # La observación se codifica en float32.
     def test_observation_dtype(self, env):
         obs, _ = env.reset()
         assert obs.dtype == np.float32
 
+    # Todos los valores de la observación están en [0, 1].
     def test_observation_in_bounds(self, env):
         obs, _ = env.reset()
         assert (obs >= 0.0).all()
         assert (obs <= 1.0).all()
 
 
-# =============================================================================
-#  Reset
-# =============================================================================
-
 class TestReset:
+
+    # reset() devuelve la tupla (obs, info).
     def test_returns_obs_and_info(self, env):
         result = env.reset()
         assert isinstance(result, tuple)
         assert len(result) == 2
 
+    # Al iniciar, la ruta actual está en el depósito.
     def test_initial_position_is_depot(self, env):
         obs, info = env.reset()
         assert info["current_route"] == [0]
 
+    # Al iniciar, la capacidad restante es la capacidad total del vehículo.
     def test_initial_remaining_capacity_full(self, env):
         env.reset()
         assert env._state.remaining_capacity == env.instance.capacity
 
+    # Al iniciar, el día y el vehículo activos son ambos 1.
     def test_initial_day_and_vehicle(self, env):
         env.reset()
         assert env._state.current_day == 1
         assert env._state.current_vehicle == 1
 
 
-# =============================================================================
-#  Step válido (visitar cliente)
-# =============================================================================
-
 class TestStepVisit:
+
+    # Visitar un cliente válido da recompensa negativa (distancia) y actualiza la ruta.
     def test_visit_valid_customer(self, env):
         env.reset()
-        # El cliente con índice de matriz 1 es el primer cliente de la instancia
         obs, reward, terminated, truncated, info = env.step(1)
-        assert reward < 0  # costo negativo (distancia)
+        assert reward < 0
         assert not terminated
         assert info["visited"] == 1
         assert info["current_route"] == [0, 1]
 
+    # La capacidad restante disminuye tras visitar un cliente.
     def test_capacity_decreases_after_visit(self, env):
         env.reset()
         initial = env._state.remaining_capacity
         env.step(1)
         assert env._state.remaining_capacity < initial
 
+    # Visitar a un cliente registra una visita completada para ese cliente.
     def test_visit_decreases_remaining_visits(self, env):
         env.reset()
         c = env.instance.customers[0]
@@ -108,38 +103,33 @@ class TestStepVisit:
         assert len(visits) == 1
 
 
-# =============================================================================
-#  Step inválido
-# =============================================================================
-
 class TestStepInvalid:
+
+    # Tras visitar un cliente, la máscara prohíbe volver a visitarlo el mismo día.
     def test_double_visit_same_day_blocked_by_mask(self, env):
-        """Tras visitar un cliente, la máscara debe prohibir visitarlo de nuevo el mismo día."""
         env.reset()
         env.step(1)
         mask = env.action_masks()
-        # La acción 1 (volver a visitar el mismo cliente) está enmascarada
         assert mask[1] == False
 
 
-# =============================================================================
-#  Cierre de ruta
-# =============================================================================
-
 class TestCloseRoute:
+
+    # Cerrar la ruta actual devuelve la posición al depósito.
     def test_close_route_returns_to_depot(self, env):
         env.reset()
-        env.step(1)  # visitar cliente
-        obs, reward, *_ = env.step(0)  # cerrar ruta
-        # Después de cerrar, la nueva ruta comienza en el depósito
+        env.step(1)
+        obs, reward, *_ = env.step(0)
         assert env._state.current_position == 0
 
+    # Cerrar la ruta avanza al siguiente vehículo del día.
     def test_close_route_advances_vehicle(self, env):
         env.reset()
         env.step(1)
         env.step(0)
         assert env._state.current_vehicle == 2
 
+    # Cerrar la ruta la registra en la solución del entorno.
     def test_close_route_registers_route_in_solution(self, env):
         env.reset()
         env.step(1)
@@ -149,13 +139,10 @@ class TestCloseRoute:
         assert sol.routes[0].nodes == [0, 1, 0]
 
 
-# =============================================================================
-#  Episodio aleatorio completo
-# =============================================================================
-
 class TestRandomEpisode:
+
+    # Un episodio con acciones aleatorias válidas termina en tiempo finito.
     def test_random_episode_terminates(self):
-        """Un episodio con acciones aleatorias válidas debe terminar en tiempo finito."""
         instance = load_instance(DATA_DIR / "p01.txt")
         env = PVRPEnv(instance, seed=0)
         env.reset()
