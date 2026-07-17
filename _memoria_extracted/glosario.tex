@@ -1,0 +1,90 @@
+\secnumberlesssection{ACRÓNIMOS}
+
+{\setlength{\parskip}{0.25cm}
+\noindent \textbf{ACO} \textit{Ant Colony Optimization} \\
+\noindent \textbf{Agentic AI} \textit{Agentic Artificial Intelligence}\\
+\noindent \textbf{BKS} \textit{Best Known Solution}\\
+\noindent \textbf{CVRP} \textit{Capacitated Vehicle Routing Problem}\\
+\noindent \textbf{GA} \textit{Genetic Algorithm}\\
+\noindent \textbf{GPU} \textit{Graphics Processing Unit}\\
+\noindent \textbf{MDP} \textit{Markov Decision Process}. \textbf{Glosario:} \hyperlink{glo:mdp}{\textcolor{blue}{Proceso de Decisión de Markov}}.\\
+\noindent \textbf{MDVRP} \textit{Multi-Depot Vehicle Routing Problem}\\
+\noindent \textbf{ML} \textit{Machine Learning}\\
+\noindent \textbf{NP} \textit{Non-deterministic Polynomial time}\\
+\noindent \textbf{NP-hard} \textit{Non-deterministic Polynomial-time Hard}\\
+\noindent \textbf{OPVRPTW} \textit{Open Periodic Vehicle Routing Problem with Time Windows}\\
+\noindent \textbf{PPO} \textit{Proximal Policy Optimization} \textbf{Glosario:} \hyperlink{glo:ppo}{\textcolor{blue}{Proximal Policy Optimization}.\\\\
+\noindent \textbf{PSO} \textit{Particle Swarm Optimization}\\
+\noindent \textbf{PVRP} \textit{Periodic Vehicle Routing Problem}. \textbf{Glosario:} \hyperlink{glo:pvrp}{\textcolor{blue}{Periodic Vehicle Routing Problem}}.\\
+\noindent \textbf{RL} \textit{Reinforcement Learning}. \textbf{Glosario:} \hyperlink{glo:rl}{\textcolor{blue}{Aprendizaje por Refuerzo}}.\\
+\noindent \textbf{SDVRP} \textit{Split Delivery Vehicle Routing Problem}\\
+\noindent \textbf{TSP} \textit{Traveling Salesperson Problem} \\
+\noindent \textbf{VNS} \textit{Variable Neighborhood Search} \\
+\noindent \textbf{VRP} \textit{Vehicle Routing Problem}\\
+\noindent \textbf{VRPTW} \textit{Vehicle Routing Problem with Time Windows}
+}
+
+\secnumberlesssection{GLOSARIO}
+
+{\setlength{\parskip}{0.35cm}
+\setlength{\parindent}{0cm}
+
+\hangindent=1.5cm \hypertarget{glo:2opt}{\textbf{2-opt}} Operador clásico de búsqueda local para problemas de ruteo que elimina cruces de aristas en una ruta reconectando dos de sus segmentos de forma alternativa. Es una de las herramientas de refinamiento local más utilizadas en metaheurísticas para VRP y su ausencia en el enfoque puramente constructivo del agente RL es una de las causas geométricas del gap observado frente al BKS.
+
+\hangindent=1.5cm \hypertarget{glo:actorcritico}{\textbf{Actor-crítico}}
+Arquitectura de Aprendizaje por Refuerzo que entrena en paralelo dos componentes: una \emph{función de política} (actor), que decide qué acción tomar en cada estado, y una \emph{función de valor} (crítico), que estima cuán bueno es el estado actual en términos de recompensa futura esperada. Ambas comparten habitualmente las primeras capas de la red neuronal y se especializan al final. Esta arquitectura es la base de PPO y estabiliza el aprendizaje al reducir la varianza del gradiente de política.
+
+\hangindent=1.5cm \hypertarget{glo:aprendizaje}{\textbf{Aprendizaje por Refuerzo}}
+Paradigma del aprendizaje automático en el que un agente aprende una política de decisión mediante ensayo y error, interactuando con un entorno para maximizar una recompensa acumulada a lo largo del tiempo. A diferencia del aprendizaje supervisado, no requiere ejemplos etiquetados: el agente descubre por sí mismo qué acciones son buenas a partir de las señales de recompensa que recibe. El marco formal que sustenta este paradigma es el Proceso de Decisión de Markov ~\cite{SuttonBarto2014}.
+
+\hangindent=1.5cm \hypertarget{glo:datadriven}{\textbf{Enfoque data-driven}}
+Metodología, también conocida en español como \emph{guiada por datos}, que extrae estrategias de decisión directamente de los datos o de la interacción con un entorno simulado, en lugar de reglas fijas diseñadas manualmente por expertos. En optimización combinatoria, representa un cambio de paradigma que permite abordar problemas dinámicos y adaptativos con mayor flexibilidad que las heurísticas tradicionales ~\cite{bertsimas2018predictiveprescriptiveanalytics}.
+
+\hangindent=1.5cm \hypertarget{glo:multiinstancia}{\textbf{Entrenamiento multi-instancia}}
+Esquema en el que un solo agente se entrena de forma alternada sobre varias instancias del problema, con el objetivo de aprender una política más general aplicable a múltiples configuraciones.
+
+\hangindent=1.5cm \hypertarget{glo:gap}{\textbf{Gap}} 
+Métrica de calidad que mide la diferencia porcentual entre el costo de la solución obtenida por un método y el costo de la mejor solución conocida (BKS) para una instancia dada. Un gap de $0\%$ equivale a igualar al BKS; valores positivos indican soluciones de mayor costo. Se calcula como $\text{gap}(\%) = (\text{costo}_{\text{método}} - \text{costo}_{\text{BKS}}) / \text{costo}_{\text{BKS}} \times 100$.
+
+\hangindent=1.5cm \hypertarget{glo:greedy}{\textbf{Greedy}} 
+Método constructivo, también conocido en español como \emph{heurística voraz}, que en cada paso elige la mejor opción inmediata sin considerar su impacto en decisiones futuras. En VRP, típicamente selecciona reiteradamente al cliente factible más cercano hasta agotar la capacidad del vehículo. Su carácter miope lo hace rápido pero limita la calidad de las soluciones que produce, razón por la cual se emplea como línea base en la comparación de métodos.
+
+\hangindent=1.5cm \hypertarget{glo:heuristica}{\textbf{Heurística}}
+Método de resolución que aplica reglas prácticas para construir soluciones factibles de buena calidad en tiempos computacionales reducidos, sin garantía de alcanzar el óptimo global. Constituyen la familia más amplia de métodos utilizados en problemas NP-hard como el VRP y sus variantes, precisamente porque los métodos exactos resultan inviables en instancias de tamaño realista.
+
+\hangindent=1.5cm \hypertarget{glo:hiperparametros}{\textbf{Hiperparámetros}}
+Parámetros de configuración del algoritmo de entrenamiento que se fijan antes de comenzar el proceso de aprendizaje y no se ajustan durante el mismo. En el caso de PPO incluyen, entre otros, el coeficiente de entropía, la tasa de aprendizaje, la arquitectura de la red neuronal y el número total de pasos de entrenamiento. Su calibración es determinante para el desempeño y estabilidad del método.
+
+
+\hangindent=1.5cm \hypertarget{glo:maskableppo}{\textbf{Maskable PPO}}
+Variante del algoritmo PPO con soporte nativo para el enmascaramiento de acciones. Integra la máscara directamente en el muestreo de acciones y en el cálculo del gradiente de política, garantizando que el agente nunca asigne probabilidad positiva a acciones bloqueadas. Es especialmente adecuada para problemas de optimización combinatoria con restricciones duras, como el PVRP.
+
+\hangindent=1.5cm \hypertarget{glo:metaheuristica}{\textbf{Metaheurística}}
+Marco de optimización de alto nivel que combina estrategias de exploración y explotación del espacio de soluciones para escapar de óptimos locales y alcanzar soluciones de alta calidad, sin garantía del óptimo global. Ejemplos representativos incluyen Variable Neighborhood Search (VNS), algoritmos genéticos y colonias de hormigas. Se distinguen de las heurísticas simples por su capacidad de adaptar la búsqueda dinámicamente.
+
+\hangindent=1.5cm \hypertarget{glo:multifrec}{\textbf{Multi-frecuencia}}
+Escenario del PVRP en el que los clientes requieren más de una visita dentro del horizonte de planificación, lo que obliga al método a coordinar patrones de días válidos por cliente. Cuando esta condición se combina con múltiples vehículos por día, la complejidad combinatoria excede la capacidad del enfoque constructivo del agente RL, constituyendo el límite estructural del método identificado en la validación.
+
+\hangindent=1.5cm \hypertarget{glo:optimolocal}{\textbf{Óptimo local}}
+Solución cuyo costo no puede mejorarse mediante modificaciones pequeñas dentro de una vecindad definida, aunque no sea necesariamente la mejor solución global del problema. Las metaheurísticas incorporan mecanismos específicos para escapar de óptimos locales, como el cambio dinámico de estructuras de vecindad en VNS.
+
+\hangindent=1.5cm \hypertarget{glo:optcombinatoria}{\textbf{Optimización combinatoria}}
+Rama de la optimización matemática que busca la mejor solución dentro de un conjunto finito y discreto de configuraciones, sujeto a restricciones que definen la factibilidad. El PVRP y sus variantes pertenecen a esta rama, y su carácter NP-hard motiva el desarrollo de métodos aproximados como las heurísticas, las metaheurísticas y, más recientemente, los enfoques data-driven ~\cite{bengio2020machinelearningcombinatorialoptimization}.
+
+\hangindent=1.5cm \hypertarget{glo:pvrp}{\textbf{Periodic Vehicle Routing Problem}}
+Variante del Vehicle Routing Problem que extiende el ruteo a un horizonte de planificación de varios días, exigiendo determinar tanto los días de visita para cada cliente (según su frecuencia requerida y sus patrones válidos) como las rutas específicas de cada jornada. Es el problema central de esta memoria y pertenece a la clase de problemas NP-hard ~\cite{HEMMELMAYR2009791}.
+
+\hangindent=1.5cm \hypertarget{glo:mdp}{\textbf{Proceso de Decisión de Markov}}
+Marco matemático formal que modela problemas de decisión secuencial mediante cuatro componentes: un conjunto de estados, un conjunto de acciones, una función de transición entre estados y una función de recompensa. La propiedad de Markov garantiza que la decisión óptima depende solo del estado actual y no de la historia previa. Es el fundamento teórico sobre el cual se reformula el PVRP para su resolución mediante Aprendizaje por Refuerzo ~\cite{SuttonBarto2014}.
+
+\hangindent=1.5cm \hypertarget{glo:ppo}{\textbf{Proximal Policy Optimization}}
+Es un algoritmo de Aprendizaje por Refuerzo que ajusta la política dando pasos pequeños y controlados, evitando cambios bruscos que puedan arruinar el entrenamiento. Es muy usado porque logra un excelente equilibrio entre simplicidad, estabilidad y rendimiento~\cite{Schulman2017}.
+
+\hangindent=1.5cm \hypertarget{glo:rewardhacking}{\textbf{Reward hacking}}
+Fenómeno, también conocido en español como \emph{vulneración de la recompensa}, en el que el agente RL descubre y explota una debilidad del diseño de la función de recompensa para maximizar la señal numérica sin cumplir la intención del diseñador. En esta memoria, una formulación inicial con penalización de magnitud fija ante cualquier infactibilidad produjo agentes que aprendían soluciones triviales (no visitar a nadie), lo que motivó el rediseño hacia una penalización proporcional al número de clientes no atendidos.
+
+\hangindent=1.5cm \hypertarget{glo:zeroshot}{\textbf{Transferencia cero-shot}}
+Evaluación, también conocida en inglés como \emph{zero-shot transfer}, de un agente previamente entrenado sobre una instancia distinta de la que se usó para su entrenamiento, sin ningún reajuste de parámetros ni reentrenamiento. Permite medir la capacidad de generalización de la política aprendida y distinguir entre aprendizaje genuino y
+memorización de configuraciones específicas.
+
+}

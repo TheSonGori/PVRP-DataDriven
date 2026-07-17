@@ -1,0 +1,316 @@
+\documentclass[letterpaper,12pt]{article}
+
+% @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@>
+% VALORES A MODIFICAR POR USTED:
+% @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@>
+
+% NOTE: Leer nota en el README sobre la font.
+\newcommand{\titulo}{Resolución del Problema de Ruteo de Vehículos Periódico mediante un Enfoque Data-Driven con Aprendizaje por Refuerzo}
+\newcommand{\ciudad}{San Joaquín} % e.g. Valparaíso
+
+% TODO: Consultar el formato de los nombres:
+\newcommand{\nombrealumno}{Javiera Elena Gutiérrez Abarca}
+\newcommand{\nombreprofesor}{Elizabeth Montero}
+\newcommand{\nombrecorreferente}{Nombre del correferente}
+
+% Mes y año del examen
+\newcommand{\mesexamen}{Diciembre}
+\newcommand{\anioexamen}{2026}
+
+% Dedicatoria y agradecimientos
+\newcommand{\dedicatoria}{
+Dedico esta memoria a mi madre Jimena y a mi padre Javier, por el esfuerzo inmenso que hicieron para entregarme la oportunidad de estudiar, por cada sacrificio silencioso, por su apoyo constante y por creer en mí, incluso en los momentos en que yo dudé de mí misma. A mi hermana mayor Tamara, por estar siempre presente, por acompañarme en los momentos difíciles y por nunca dudar de que sería capaz. Y también a mí, por no rendirme, por seguir adelante incluso cuando el camino se volvió difícil, y por llegar hasta aquí.
+}
+\newcommand{\agradecimientos}{ 
+Quiero agradecer, en primer lugar, a mi profesora guía Elizabeth, por aceptar acompañarme en el desarrollo de esta memoria, por su disposición, orientación y por cada una de las revisiones que contribuyeron a mejorar este trabajo.
+
+Agradezco también a mis amigas del colegio, por haber estado presentes incluso antes de que comenzara esta etapa universitaria, por acompañarme a lo largo de los años y por seguir siendo un espacio de confianza, apoyo y desconexión cuando más lo necesité.
+
+A mis amistades de la universidad, tanto a mi primer grupo como a aquellas personas que fui conociendo durante el camino. En los momentos en que necesitaba desconectarme, despejar la mente o simplemente sentirme acompañada, nunca dudaron en estar presentes. No tengo el espacio para mencionarlos a todos, pero cada uno sabe a quiénes me refiero y el lugar importante que ocupó en este proceso.
+
+A mis padres, Jimena y Javier, por motivarme constantemente, por recordarme que no debía rendirme ni cruzarme de brazos frente a las dificultades, y por entregarme siempre su apoyo incondicional. A mi hermana Tamara, por sus consejos, su compañía y por estar presente cada vez que la necesité.
+
+Finalmente, agradezco a mis mascotas, Cucha, Kobe y Klay, que estuvieron conmigo en la habitación durante tantas horas de escritura, estudio y cansancio. Su compañía silenciosa hizo que este proceso se sintiera un poco menos solitario.
+
+A todos quienes, de una u otra forma, fueron parte de este camino, muchas gracias.
+}
+
+% @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@>
+
+\newcommand{\resumen}{
+Esta memoria desarrolla y evalúa un modelo basado en Aprendizaje por Refuerzo (RL) para el Problema de Ruteo de Vehículos Periódico (PVRP), como alternativa data-driven a las metaheurísticas clásicas. El problema se reformula como un Proceso de Decisión de Markov, en el que un agente entrenado con Maskable PPO construye la solución de forma secuencial. El modelo se evaluó sobre nueve instancias del conjunto NEO mediante un análisis multi-semilla, contrastándolo con una heurística voraz (Greedy) y con Variable Neighborhood Search (VNS). En instancias de $50$ clientes el agente supera a VNS (gaps de $+19{,}7\%$ frente a $+31{,}7\%$ en $p01$), aunque VNS recupera ventaja al escalar. Su principal fortaleza es el tiempo de inferencia, entre uno y dos órdenes de magnitud menor que VNS, lo que posiciona al RL como una alternativa veloz y competitiva dentro de un régimen bien caracterizado.
+}
+\newcommand{\resumeningles}{
+This work develops and evaluates a Reinforcement Learning (RL) model for the Periodic Vehicle Routing Problem (PVRP), as a data-driven alternative to classical metaheuristics. The problem is reformulated as a Markov Decision Process, in which an agent trained with Maskable PPO builds the solution sequentially. The model was evaluated on nine instances of the NEO set through a multi-seed analysis, compared against a greedy heuristic (Greedy) and Variable Neighborhood Search (VNS). On $50$-customer instances the agent outperforms VNS (gaps of $+19{,}7\%$ versus $+31{,}7\%$ on $p01$), although VNS regains the advantage at larger scales. Its main strength is inference time, between one and two orders of magnitude lower than VNS, positioning RL as a fast and competitive alternative within a well-characterized regime.
+}
+\newcommand{\palabrasclave}{
+problema de ruteo de vehículos periódico; aprendizaje por refuerzo; proceso de decisión de markov; optimización combinatoria.
+}
+\newcommand{\palabrasclaveingles}{
+periodic vehicle routing problem; reinforcement learning; markov decision process; combinatorial optimization.
+}
+% @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@>
+
+% Paquete para importar imágenes
+\usepackage{graphicx}
+% Directorio de las imágenes
+\graphicspath{ {figures/} }
+
+% Idioma y fuentes
+\usepackage[spanish,es-tabla]{babel}
+\usepackage[T1]{fontenc}
+
+\usepackage{fontspec}
+% Los siguientes comandos fueron sugeridos por @anibalbastiass (ver issue#5)
+% para contar con Carlito en cursiva y negrita.
+\setmainfont{Carlito}[BoldFont={* Bold}]
+\setmainfont{Carlito}[ItalicFont={* Italic}]
+
+% Paquete para definir cualquier tamaño de font
+\usepackage{anyfontsize}
+
+% Settear font
+\setmainfont{Carlito}
+
+% Tamaño de la página y márgenes
+\usepackage[letterpaper,top=2.5cm,bottom=3cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+% Determinar interlineado:
+\renewcommand{\baselinestretch}{1.0}
+
+% Eliminar sangrías:
+\setlength{\parindent}{0cm}
+
+% Paquete para definir los formatos de los títulos
+\usepackage[explicit]{titlesec}
+
+\titleformat{name=\section}[block]{\fontsize{16}{24}\selectfont\bfseries}{}{0pt}{#1}
+\titleformat{name=\section,numberless}[block]{\fontsize{16}{24}\selectfont\bfseries}{}{0pt}{#1}
+\titlespacing*{name=\section}{0pt}{0pt}{0.5cm}
+\titlespacing*{name=\section,numberless}{0pt}{0pt}{0.5cm}
+
+% Separación entre parrafos
+\setlength{\parskip}{0.4cm}
+
+% Paquetes de utilidad general
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{tikz}
+\usepackage{csquotes}
+
+% AGREGADOS POR MI %
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usetikzlibrary{arrows.meta,positioning,fit, calc, shapes.geometric, fit,backgrounds, patterns}
+\usepackage{subcaption}
+\usepackage{xspace}
+\usepackage{amssymb}
+
+\usepackage[ruled,vlined,linesnumbered,spanish]{algorithm2e}
+
+\renewcommand{\algorithmcfname}{Algoritmo}
+\SetAlgoCaptionSeparator{:}
+\DontPrintSemicolon
+
+\SetKwInput{KwIn}{Input}
+\SetKwInput{KwOut}{Output}
+\SetKw{KwReturn}{return}
+
+\SetNlSty{textbf}{}{}
+\SetNlSkip{0.6em}
+\SetAlgoNlRelativeSize{-1}
+
+% COLORES %
+\usepackage{xcolor}
+\definecolor{pvrpBlock}{HTML}{F3F4F6}   % gris claro
+\definecolor{pvrpAgent}{HTML}{DDE7D6}   % verde salvia suave
+\definecolor{pvrpBorder}{HTML}{2F2F2F}  % gris oscuro
+\definecolor{agentFill}{HTML}{F2DEC7}   % beige suave
+\definecolor{envFill}{HTML}{E6E8F8}     % lavanda suave
+
+\definecolor{maskAction}{HTML}{E2E2E2}   % gris pastel
+\definecolor{maskValid}{HTML}{BFE3B4}    % verde pastel
+\definecolor{maskInvalid}{HTML}{F4C2C2}  % rojo/rosado pastel
+
+\definecolor{stateFill}{HTML}{E6E6FA}   % lavanda suave
+\definecolor{layerFill}{HTML}{F4E3CC}   % beige suave
+\definecolor{policyFill}{HTML}{D8F0D2}  % verde suave
+\definecolor{valueFill}{HTML}{F1D6D9}   % rosado suave
+\definecolor{pvrpBorder}{HTML}{2F2F2F}
+
+\definecolor{greedyFill}{HTML}{8E44AD}   % morado
+\definecolor{greedyLine}{HTML}{5B2C6F}
+
+\definecolor{vnsFill}{HTML}{F28E2B}      % naranjo
+\definecolor{vnsLine}{HTML}{A64F03}
+
+\definecolor{rlFill}{HTML}{1F77B4}       % azul
+\definecolor{rlLine}{HTML}{0B3C5D}
+
+\definecolor{rlAColor}{HTML}{0057B8}     % azul intenso
+\definecolor{rlCColor}{HTML}{C00000}     % rojo sobrio
+\definecolor{vnsColor}{HTML}{F28E2B}     % naranjo
+
+
+% Formato de las tablas de contenido
+\usepackage{tocbasic}
+
+%% Originalmente se usaba tocstyle en vez de tocbasic.
+%% Si se quiere usar, descomentar:
+% \usepackage[tocflat]{tocstyle}
+% \usetocstyle{allwithdot}
+%% tocstyle.sty se obtener de https://github.com/firemodels/fds/blob/master/Manuals/LaTeX_Style_Files/tocstyle.sty
+
+% Para obtener el número de la última página
+\usepackage{lastpage}
+
+% Header y footer
+\usepackage{fancyhdr}
+\fancypagestyle{portada}{
+    \lhead{}
+    \chead{}
+    \rhead{}
+    \lfoot{}
+    \cfoot{\fontsize{10}{12}\selectfont \thepage}
+    \rfoot{}
+    \renewcommand{\headrulewidth}{0pt}
+}
+\fancypagestyle{intermedio}{
+    \lhead{}
+    \chead{\fontsize{10}{12}\selectfont\MakeUppercase{\titulo}}
+    \rhead{}
+    \lfoot{}
+    \cfoot{\fontsize{10}{12}\selectfont Página \textbf{\thepage}\ de \textbf{\pageref{LastPage}}}
+    \rfoot{}
+    \renewcommand{\headrulewidth}{1pt}
+}
+
+% Comandos para secciones
+\newcommand{\secnumbersection}[1]{
+\addtocounter{section}{1}
+\phantomsection
+\section*{CAPÍTULO \thesection \texorpdfstring{\\}\ #1}
+\addcontentsline{toc}{section}{CAPÍTULO \thesection : #1}
+\setcounter{subsection}{0}
+}
+\newcommand{\secnumberlesssection}[1]{
+\section*{#1}
+\phantomsection
+\addcontentsline{toc}{section}{#1}
+\setcounter{subsection}{0}
+}
+
+% Nombres
+\addto\captionsspanish{\renewcommand{\contentsname}{ÍNDICE DE CONTENIDOS}}
+\addto\captionsspanish{\renewcommand{\listfigurename}{ÍNDICE DE FIGURAS}}
+\addto\captionsspanish{\renewcommand{\listtablename}{ÍNDICE DE TABLAS}}
+\makeatletter
+\renewenvironment{thebibliography}[1]
+     {\secnumberlesssection{REFERENCIAS BIBLIOGRÁFICAS}
+      \@mkboth{\MakeUppercase\bibname}{\MakeUppercase\bibname}%
+      \list{\@biblabel{\@arabic\c@enumiv}}%
+           {\settowidth\labelwidth{\@biblabel{#1}}%
+            \leftmargin\labelwidth
+            \advance\leftmargin\labelsep
+            \@openbib@code
+            \usecounter{enumiv}%
+            \let\p@enumiv\@empty
+            \renewcommand\theenumiv{\@arabic\c@enumiv}}%
+      \sloppy
+      \clubpenalty4000
+      \@clubpenalty \clubpenalty
+      \widowpenalty4000%
+      \sfcode`\.\@m}
+     {\def\@noitemerr
+       {\@latex@warning{Empty `thebibliography' environment}}%
+      \endlist}
+\makeatother
+
+% Personalizar Tabla de Contenidos
+
+\usepackage{tocloft}
+\renewcommand{\cftsecfont}{\fontsize{12}{14}\selectfont\fontspec{Carlito}}
+\renewcommand{\cftsubsecfont}{\fontsize{12}{14}\selectfont\fontspec{Carlito}}
+\renewcommand{\cftsubsubsecfont}{\fontsize{12}{14}\selectfont\fontspec{Carlito}}
+
+\renewcommand\cftfigfont{\fontsize{12}{14}\selectfont\fontspec{Carlito}}
+
+% Links sin color
+\usepackage{hyperref}
+\hypersetup{colorlinks = false}
+
+% Comando para secciónes sin enumeración
+% (sugerido por @anibalbastiass https://github.com/autopawn/tex-thesis-template/issues/5#issuecomment-916106128)
+\newcommand{\secnumberlesssubsection}[1]{
+\subsection*{#1}
+\phantomsection
+\addcontentsline{toc}{subsection}{#1}
+\setcounter{subsection}{0}
+}
+
+
+
+% @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@>
+
+% Forma de uso:
+% \secnumberlesssubsection{"Sub seccion sin enumeración"}
+\usepackage{color}
+\newcommand*{\eli}[1]{{\textcolor{red}{Eli: #1}}\xspace} 
+\newcommand*{\javi}[1]{{\textcolor{blue}{Javi: #1}}\xspace} 
+% @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@>
+\begin{document}
+\sloppy % Para evitar que referencias se escapen de los márgenes.
+
+\pagestyle{portada}
+\pagenumbering{roman}
+\input{portadas}
+
+\newpage
+\input{glosario}
+
+%Índice de contenidos:
+\newpage
+\thispagestyle{portada}
+\tableofcontents
+
+%Índice de figuras:
+\newpage
+\thispagestyle{portada}
+\phantomsection
+\addcontentsline{toc}{section}{ÍNDICE DE FIGURAS}
+\listoffigures
+\phantomsection
+\addcontentsline{toc}{section}{ÍNDICE DE TABLAS}
+\listoftables
+
+\newpage
+\pagestyle{intermedio}
+\pagenumbering{arabic}
+\input{introduccion}
+\newpage
+\input{definicion_del_problema} \label{sec:def}
+\newpage
+\input{marco_conceptual}
+\newpage
+\input{propuesta_de_solucion}
+\newpage
+\input{validacion_de_la_solucion}
+\newpage
+\input{conclusiones}
+
+\newpage
+\input{anexos}
+
+\newpage
+% Bibliografía estilo APA:
+\bibliographystyle{apalike-es}
+\bibliography{bibliografia}{}
+
+\end{document}

@@ -1,0 +1,659 @@
+\secnumbersection{PROPUESTA DE SOLUCIÓN}
+
+Tal como se estableció en el capítulo 2, el Periodic Vehicle Routing Problem (PVRP) puede reformularse como un proceso de decisión de Markov (MDP). Bajo este paradigma, la solución no se obtiene de forma estática ni mediante reglas predefinidas, sino que se construye secuencialmente a través de la interacción entre un agente y su entorno.
+
+Los componentes fundamentales del enfoque, es decir, la representación del estado, el espacio de acciones, la función de recompensa y la red que aproxima la política son elementos estándar de cualquier formulación de ruteo mediante aprendizaje por refuerzo, y en ese sentido no constituyen una novedad en sí mismos. Lo distintivo de esta memoria radica en \textit{cómo} se definen y articulan esos componentes para el caso periódico. En particular, la contribución central es un enfoque de \textit{construcción secuencial pura} aplicado directamente sobre el PVRP clásico, en el que la asignación de los días de visita no se resuelve como una etapa separada ni se impone mediante reglas externas, sino que emerge de forma implícita del propio proceso constructivo. Como se estableció anteriormente, los métodos constructivos puros se han desarrollado casi exclusivamente sobre variantes no periódicas del ruteo, mientras que los escasos trabajos que abordan el PVRP mediante RL lo hacen a través de esquemas híbridos con metaheurísticas. Esta combinación de PVRP clásico, construcción secuencial pura, sin metaheurística acoplada y con patrones emergentes es la que, según la literatura revisada, no cuenta con un antecedente previo y es la que se desarrolla en este capítulo.
+
+El enfoque propuesto en esta memoria se basa en definir con cuidado qué tipo de acciones tomará el agente. En lugar de hacer que el agente decida al mismo tiempo qué días visitar a cada cliente y cómo construir las rutas, se separa el problema para reducir su complejidad. Abordar ambas decisiones de forma simultánea generaría un espacio de búsqueda demasiado grande y difícil de manejar para un algoritmo que aprende desde cero. Por esta razón, se adopta una estrategia de construcción secuencial, donde el agente arma la solución paso a paso, seleccionando los nodos de la ruta uno a uno. Bajo este modelo, el agente construye la solución completa visitando un cliente a la vez, decidiendo en cada iteración si continuar la ruta en curso o cerrarla retornando al depósito. Cada decisión se toma en el contexto estricto del día y de los vehículos activos en la simulación, lo que hace que los patrones de visita queden determinados por la propia secuencia de construcción.
+
+La metodología se inspira en la línea de trabajo de~\cite{nazari2018reinforcementlearningsolvingvehicle} (Capítulo 2, sección~\ref{sec:Aplicaciones}). Esta memoria extiende dicha idea al dominio periódico, integrando la dimensión temporal del PVRP como una variable crítica dentro de la representación del estado
+
+En la práctica, el flujo de la solución opera a partir de una instancia del PVRP que define el entorno para el agente que codifica la situación actual del ruteo. El agente, guiado por su política aprendida, selecciona una acción válida que es restringida por un mecanismo de enmascaramiento para asegurar la factibilidad local. Posteriormente, el entorno ejecuta la transición, actualiza su estado interno y devuelve una recompensa numérica. Este bucle iterativo se repite hasta completar el horizonte de planificación, entregando finalmente una solución completa cuyo costo logístico puede evaluarse frente a los mejores resultados conocidos.
+
+Esta forma de armar la solución lleva a la práctica el enfoque data-driven presentado en la Sección~\ref{sec:EnfoquesData-Driven} del Capítulo 2. En los métodos clásicos como Greedy o Variable Neighborhood Search, las reglas de decisión (como los criterios de cercanía o los operadores de búsqueda) tienen que diseñarse y programarse a mano antes de intentar resolver el problema. Aquí, en cambio, la política $\pi_\theta$ no tiene reglas explícitas. El agente la aprende por su cuenta, interactuando con la simulación y ajustando sus parámetros $\theta$ basándose en las recompensas que obtiene. Por lo tanto, la \enquote{inteligencia} para construir buenas rutas no viene de un código estático, sino de la propia experiencia que acumula el agente al entrenar. Esto es vital para resolver el problema de rigidez de las heurísticas tradicionales (Capítulo 1, sección~\ref{sec:Motivacion}). Si las condiciones del problema cambian, una metaheurística exige recalibrar todo a mano. Con el modelo propuesto, el agente puede adaptar su comportamiento simplemente reentrenando con los nuevos escenarios, sin necesidad de reconstruir el algoritmo desde cero.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        block/.style={
+            draw=pvrpBorder,
+            rounded corners,
+            minimum width=2.8cm,
+            minimum height=1.1cm,
+            align=center,
+            fill=pvrpBlock,
+            font=\normalsize
+        },
+        agent/.style={
+            draw=pvrpBorder,
+            rounded corners,
+            minimum width=2.5cm,
+            minimum height=1.3cm,
+            align=center,
+            fill=pvrpAgent,
+            font=\normalsize
+        },
+        arrow/.style={
+            -{Latex[length=3mm]},
+            thick,
+            draw=pvrpBorder
+        }
+    ]
+    
+    \node[block] (instancia) at (0,0) {Instancia\\PVRP};
+    \node[block] (entorno) at (4.2,0) {Entorno de\\simulación};
+    \node[agent] (agente) at (8.4,0) {Agente};
+    \node[block] (solucion) at (13.2,0) {Solución\\del PVRP};
+    
+    \draw[arrow] (instancia.east) -- (entorno.west);
+    
+    \draw[arrow] ([yshift=0.28cm]entorno.east) --
+        node[above, font=\small] {$s_t, m_t$}
+        ([yshift=0.28cm]agente.west);
+    
+    \draw[arrow] ([yshift=-0.28cm]agente.west) --
+        node[below, font=\small] {$a_t$}
+        ([yshift=-0.28cm]entorno.east);
+    
+    \draw[arrow] (agente.east) --
+        node[above, font=\small, midway] {fin episodio}
+        (solucion.west);
+    
+    \node[font=\small] at (4.2,-1.15) {recompensa $r_t$};
+    
+    \end{tikzpicture}}
+    \caption{\label{fig:Pipeline} Pipeline general de la solución propuesta.}
+    Fuente: Elaboración propia.
+\end{figure}
+
+La Figura~\ref{fig:Pipeline} resume el flujo completo de la solución propuesta. El entorno recibe una instancia del PVRP y presenta al agente un estado $s_t$ y una máscara $m_t$ de acciones válidas. El agente selecciona una acción $a_t$ y recibe la recompensa $r_t$ del entorno. Al finalizar el episodio se obtiene una solución completa del PVRP. 
+
+%=============================================================%
+\subsection{Formulación del PVRP como Proceso de Decisión de Markov} \label{sec:FormulacionMDP}
+%=============================================================%
+La traducción del PVRP desde su formulación matemática hacia el paradigma del Aprendizaje por Refuerzo requiere una representación formal bajo el marco de los Procesos de Decisión de Markov (MDP). Este mapeo permite modelar la construcción de rutas como una secuencia de decisiones interdependientes donde cada acción altera el estado del sistema logístico. En esta sección se detalla la especificación analítica de los componentes que estructuran el MDP, que configuran un aporte fundamental al diseño de la solución.
+
+Para garantizar la claridad en las ecuaciones y algoritmos descritos a lo largo de esta memoria, en la Tabla~\ref{table:NotacionMatematica} se resume la notación matemática empleada.
+
+\begin{table}[H]
+    \centering
+    \caption{\label{table:NotacionMatematica} Notación matemática utilizada en la formulación del problema.}
+    \caption*{Fuente: Elaboración propia.}
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabular}{>{\centering\arraybackslash}p{3cm} p{10.5cm}}
+        \toprule
+        \textbf{Símbolo} & \textbf{Descripción} \\
+        \midrule
+        \multicolumn{2}{c}{\textbf{Parámetros del Problema de Ruteo}} \\
+        \midrule
+        $G = (V, A)$ & Grafo dirigido del problema \\
+        $V$ & Conjunto de nodos (depósito y clientes) \\
+        $V' = V \setminus \{0\}$ & Conjunto de clientes \\
+        $A$ & Conjunto de arcos del grafo \\
+        $N$ & Número de clientes ($N = |V'|$) \\
+        $T$ & Horizonte de planificación (en días) \\
+        $K$ & Conjunto de vehículos disponibles \\
+        $Q$ & Capacidad máxima de cada vehículo \\
+        $i, j$ & Índices para representar nodos específicos ($i, j \in V$) \\
+        $k$ & Índice para representar un vehículo específico ($k \in K$) \\
+        $q_i$ & Demanda del cliente $i \in V'$ \\
+        $f_i$ & Frecuencia de visita requerida del cliente $i$ \\
+        $c_{ij}$ & Costo de viaje del arco $(i,j) \in A$ \\
+        $C_i$ & Conjunto de patrones válidos para el cliente $i$ \\
+        \midrule
+        \multicolumn{2}{c}{\textbf{Elementos del Agente y Entorno}} \\
+        \midrule
+        $t$ & Índice del paso de decisión dentro de un episodio \\
+        $s_t$ & Estado observado en el paso $t$ \\
+        $a_t$ & Acción seleccionada en el paso $t$ \\
+        $r_t$ & Recompensa recibida en el paso $t$ \\
+        $m_t$ & Máscara de acciones válidas en el paso $t$ \\
+        $\pi_\theta(a \mid s)$ & Política del agente, parametrizada por $\theta$ \\
+        $V_\phi(s)$ & Función de valor, parametrizada por $\phi$ \\
+        $\theta, \phi$ & Parámetros (pesos) de las redes neuronales de política y valor \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Para modelar la dinámica del entorno de ruteo periódico, el problema se descompone en los siguientes elementos centrales de un MDP:
+
+\begin{itemize}
+    \item \textbf{Espacio de Estados ($S$):} Es un vector que guarda la información clave del sistema en cada paso $t$. Incluye la posición del vehículo actual, la capacidad que le queda (normalizada), el día de planificación actual, qué vehículo se está usando y el registro de los clientes ya visitados.
+
+    \item \textbf{Espacio de Acciones ($A$):} Es un conjunto discreto de $N+1$ opciones. El agente puede decidir enviar el vehículo a un cliente en particular $a$ (donde $a \in \{1, \dots, N\}$) o elegir la acción $a=0$, que sirve para cerrar la ruta actual y hacer que el vehículo regrese al depósito.
+
+    \item \textbf{Función de Transición ($P$):} Es un proceso determinista. Al elegir una acción $a_t$, el entorno actualiza de inmediato la posición del vehículo, resta la capacidad utilizada y marca la visita al cliente. Si se cierra una ruta o ya no quedan vehículos disponibles para ese día, el sistema avanza al día siguiente de la planificación.
+
+    \item \textbf{Función de Recompensa ($r$):} Funciona en dos partes. Primero, una recompensa por paso que penaliza cada movimiento según el costo del trayecto recorrido ($r_t = -c_{ij}$). Segundo, se entrega una recompensa final al terminar el episodio. Esta otorga un bono si la solución completa es válida o aplica una penalización proporcional a la cantidad de clientes que quedaron sin visitar en caso de que sea infactible.
+
+    \item \textbf{Manejo de Restricciones:} Se realiza de forma híbrida. Las restricciones operativas, como la capacidad máxima del vehículo o no visitar al mismo cliente dos veces el mismo día, se cumplen de forma estricta bloqueando opciones inválidas paso a paso. Por otro lado, el objetivo de cumplir con la demanda total de los clientes se incentiva de forma indirecta a través de la recompensa final.
+
+    \item \textbf{Horizonte del Episodio:} El tiempo es finito. El episodio termina cuando se acaba el período de planificación $T$ y todos los vehículos del último día han gastado su capacidad o han vuelto al depósito.
+\end{itemize}
+
+La interacción entre el agente y el entorno sigue el ciclo clásico del aprendizaje por refuerzo. En cada paso $t$, el entorno entrega al agente el estado actual $s_t$ junto con una máscara binaria $m_t$, que indica qué acciones están permitidas en ese momento. Con esta información, el agente usa su política $\pi_\theta$ para elegir una acción válida $a_t$. Luego, el entorno ejecuta dicha acción, pasa al siguiente estado $s_{t+1}$, entrega una recompensa inmediata $r_t$ y verifica si el episodio ha terminado. Este flujo iterativo de control se ilustra en la Figura~\ref{fig:Ciclo}. 
+
+%\eli{¿faltan flechitas acá?}  \javi{Siiii! estaban de forma muy delgada, pero ahora si se ven!}
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        box/.style={
+            draw=pvrpBorder,
+            rounded corners,
+            thick,
+            minimum width=3.5cm,
+            minimum height=1.45cm,
+            align=center,
+            font=\small
+        },
+        arrow/.style={
+            -{Stealth[length=3mm,width=2mm]},
+            line width=0.6pt,
+            draw=pvrpBorder
+        }
+    ]
+    
+    \node[box, fill=pvrpAgent] (agent) at (0,0)
+        {\textbf{Agente}\\[2pt] Política $\pi_{\theta}(a \mid s)$};
+    
+    \node[box, fill=pvrpBlock] (env) at (7.0,0)
+        {\textbf{Entorno PVRP}\\[2pt] Estado interno};
+    
+    \draw[arrow]
+        ([yshift=0.35cm]agent.east)
+        to[out=22,in=158]
+        node[midway, above, font=\small, inner sep=1pt]
+        {acción $a_t$}
+        ([yshift=0.35cm]env.west);
+    
+    \draw[arrow]
+        ([yshift=-0.35cm]env.west)
+        to[out=-158,in=-22]
+        node[midway, yshift=-0.48cm, align=center, font=\small, inner sep=1pt]
+        {estado $s_{t+1}$, máscara $m_{t+1}$\\ recompensa $r_t$, fin}
+        ([yshift=-0.35cm]agent.east);
+    
+    \end{tikzpicture}
+    \caption{\label{fig:Ciclo} Ciclo de interacción agente-entorno en el MDP del PVRP.}
+    \caption*{Fuente: Elaboración propia.}
+\end{figure}
+
+El Algoritmo~\ref{alg:ciclo-agente} traduce el ciclo de la Figura~\ref{fig:Ciclo} en pasos concretos para describir cómo el agente genera una solución completa del PVRP.
+
+\IncMargin{1.6em}
+    \begin{algorithm}[H]
+        \caption{Construcción de una solución del PVRP por el agente RL}
+        \label{alg:ciclo-agente}
+        
+        \KwIn{Instancia del PVRP, política entrenada $\pi_\theta$}
+        \KwOut{Solución completa $\mathcal{S}$, recompensa acumulada $G$}
+        
+        Inicializar el entorno con la instancia: $s_0 \leftarrow \texttt{entorno.reset()}$\;
+        $G \leftarrow 0$\;
+        $t \leftarrow 0$\;
+        $\text{terminado} \leftarrow \text{Falso}$\;
+        
+        \While{no terminado}{ \label{l:ciclo}
+            Obtener máscara de acciones válidas: $m_t \leftarrow \texttt{entorno.action\_masks()}$\;
+            Muestrear acción de la política enmascarada: $a_t \sim \pi_\theta(a \mid s_t, m_t)$\;
+            Ejecutar la acción en el entorno: $(s_{t+1}, r_t, \text{terminado}) \leftarrow \texttt{entorno.step}(a_t)$\;
+            Acumular recompensa: $G \leftarrow G + r_t$\;
+            $t \leftarrow t + 1$\;
+        }
+        
+        Construir solución a partir del historial de acciones: $\mathcal{S} \leftarrow \texttt{entorno.get\_solution()}$\;
+        \KwReturn{$\mathcal{S}, G$}
+    \end{algorithm}
+\DecMargin{1.6em}
+
+Como se puede ver en el pseudocódigo. En la línea 1 se inicializa el entorno con la instancia, obteniendo el estado inicial $s_0$. Las líneas 2 a 4 inicializan la recompensa acumulada $G$, el contador de pasos $t$ y la señal de \textit{terminación}. El bucle principal (líneas 5 a 11), referenciado en la Línea~\ref{l:ciclo}, itera hasta el fin del episodio. En cada iteración se obtiene la máscara $m_t$ de acciones válidas (línea 6), se muestrea una acción de la política enmascarada (línea 7), se ejecuta la transición en el entorno (línea 8) y se acumula la recompensa obtenida (línea 9). Al finalizar el bucle, la línea 12 construye la solución completa a partir del historial de acciones ejecutadas.  Como se puede ver, el ciclo se detiene cuando el entorno devuelve la señal \textit{terminado}, lo cual ocurre cuando se acaba el tiempo de planificación y los vehículos del último día terminan su ruta. A lo largo del episodio, la recompensa se va sumando a la variable $G$, y el objetivo final es que el agente aprenda a maximizar este valor, lo cual se logra utilizando \textbf{PPO}. 
+
+%\javi{Al final coloque la definición de PPO en el glosario :) Mi idea es hacer este tipo de enlace con los acronimos y el glosario, que opina? el rectángulo rojo es lo único que no me convence del todo} \eli{Prefiero solo en negrita.} \javi{Okay!!! lo dejé solo en negrita, saqué el hipervínculo}
+
+%\eli{en la línea~\ref{l:ciclo}} \javi{ahora si :)}
+%\eli{Describe el pseudocódigo brevemente aprovechando las líneas del algoritmo} \javi{listooooo!}
+
+A continuación se detallan los cuatro componentes principales del Proceso de Decisión de Markov: la representación del estado, el espacio de acciones, la función de recompensa y el mecanismo de enmascaramiento.
+
+%=============================================================%
+\subsubsection{Representación del estado} \label{sec:Representaciondelestado}
+
+La representación del estado dentro del Proceso de Decisión de Markov (MDP) es fundamental. Su función es entregarle al agente toda la información que necesita para tomar buenas decisiones de ruteo, abarcando al mismo tiempo la parte espacial (dónde estamos) y la temporal (en qué momento). Para lograr este propósito, se estructuró una representación vectorial de tamaño fijo que integra y unifica cuatro grupos fundamentales:
+
+\begin{itemize}
+    \item \textbf{Posición actual del agente:} Indica en qué nodo exacto se encuentra el vehículo activo en el paso $t$, ya sea en el depósito o en la ubicación de un cliente. Esta variable es esencial debido a que determina directamente las distancias relativas y los costos de transporte asociados al siguiente movimiento.
+
+    \item \textbf{Capacidad residual del vehículo:} Muestra cuánta carga le queda disponible al vehículo actual, normalizada respecto a su capacidad máxima $Q$. Este parámetro condiciona el conjunto de decisiones factibles, determinando qué clientes pueden ser atendidos de forma inmediata sin superar los límites de volumen permitidos.
+
+    \item \textbf{Progreso temporal:} Indica el día actual dentro del horizonte de planificación $T$ y qué vehículo específico estamos utilizando. Esto le da al agente el contexto temporal necesario para saber exactamente \enquote{dónde está parado} dentro de la planificación general.
+
+    \item \textbf{Estado de visita de los clientes:} Es un registro detallado de cada cliente en la red. Guarda su demanda, la frecuencia con la que debe ser visitado y cuántas visitas le faltan para cumplir su patrón. Con esto, el agente puede evaluar la situación y priorizar a los clientes que aún necesitan atención.
+\end{itemize}
+
+El tamaño total de este vector depende directamente del número de clientes $N$ de la instancia, esto es debido a que el bloque de información correspondiente al estado de los clientes se replica exactamente $N$ veces dentro del arreglo.
+
+Por ejemplo, para la instancia de referencia p01: constituida por un conjunto de 50 clientes y un horizonte de planificación de 2 días, esta metodología de codificación produce un vector de estado con un tamaño fijo de 204 características. Mantener esta dimensión fija para cada instancia es una decisión de gran relevancia. Esto implica que un agente entrenado opera de manera especializada sobre instancias de un mismo tamaño combinatorio, un detalle fundamental para el comportamiento del modelo que se analiza a fondo en la Sección~\ref{sec:Arquitecturadelagente}, al discutir las configuraciones según la escala de la red.
+
+%=============================================================%
+\subsubsection{Espacio de acciones} \label{sec:Espaciodeacciones}
+
+En cada paso, el agente elige una acción dentro de un conjunto de $N+1$ opciones, donde $N$ representa el número de clientes que conforman la instancia:
+
+\begin{itemize}
+    \item \textbf{Acciones de visita ($a \in \{1, 2, \dots, N\}$):} Corresponde a la decisión de enviar el vehículo hacia el cliente $a$, añadiéndolo secuencialmente a la ruta que se esta armando.
+
+    \item \textbf{Acción de cierre de ruta ($a = 0$):} Representa la instrucción de cerrar la ruta actual, ordenando el retorno del vehículo al depósito.  Esto da paso a utilizar el siguiente vehículo disponible o a comenzar el día siguiente.
+\end{itemize}
+
+La inclusión explícita de la acción \textit{cerrar ruta} dentro del espacio de decisiones responde a una elección de diseño intencional. En vez de imponer reglas externas para terminar los recorridos, se le da al agente el control directo sobre la estructura de la solución. Así, es el propio modelo el que decide cuántas rutas abrir y en qué momento exacto cerrarlas. De esta forma, la cantidad de rutas por día no es un parámetro fijo, sino el resultado directo de lo que aprende la red neuronal.
+
+%=============================================================%
+\subsubsection{Función de recompensa} \label{sec:Funcionderecompensa}
+La función de recompensa es el mecanismo que guía al agente hacia soluciones de calidad, traduciendo los objetivos del PVRP en una señal numérica. Su diseño es uno de los puntos más críticos de todo el sistema, pues el comportamiento del modelo emerge directamente de cómo se define esta señal.
+
+La recompensa se estructura en dos componentes. Durante la fase de construcción de las rutas, cada desplazamiento entre dos nodos $i$ y $j$ recibe una recompensa equivalente a la distancia recorrida en negativo:
+\begin{equation}
+    \label{eq:recompensa_transicion}
+    r_t = -c_{ij},
+\end{equation}
+De esta forma, se asegura que maximizar la recompensa acumulada equivalga a minimizar el costo total de transporte, alineándose perfectamente con la función objetivo del modelo matemático.
+
+Al terminar el episodio, se entrega una recompensa final. Esta le da un bono al agente si logró una solución factible, o lo castiga si dejó clientes sin visitar:
+
+\begin{equation}
+    \label{eq:recompensa_terminal}
+    r_T =
+    \begin{cases}
+    +R_{\text{fact}} & \text{si la solución es factible,} \\
+    -R_{\text{base}} - \lambda \cdot n_{\text{miss}} & \text{en caso contrario.}
+    \end{cases}
+\end{equation}
+
+En la ecuación~\eqref{eq:recompensa_terminal}, $R_{\text{fact}}$ es el bono por lograr una solución factible, $R_{\text{base}}$ es la penalización base por infactibilidad, $n_{\text{miss}}$ es la cantidad de visitas que quedaron pendientes al terminar el episodio, y $\lambda$ es cuánto se penaliza por cada cliente faltante.
+
+%\eli{¿tenemos resultados comparativos de esto?}
+%\javi{SIIII corrí un barrido de 4 configuraciones sobre p01 variando la penalización base y el lambda; los resultados quedaron en la Tabla~\ref{tab:reward-hacking}.Reescribí el párrafo para explicarlo así, en vez de afirmar un colapso automático.}
+
+%\eli{¿Se basa en la literatura?}
+%\javi{SIII agregué la justificación teórica: la penalización proporcional se enmarca en el reward shaping, lo expliqué en un footnote (tal vez seria mejor el glosario?)}
+
+El diseño de esta penalización terminal requirió especial cuidado, sustentando su formulación proporcional en el marco teórico del \textit{reward shaping}~\cite{NgHaradaRussell1999}. \textit{reward shaping} es una técnica del Aprendizaje por Refuerzo que consiste en modificar o enriquecer la función de recompensa para guiar al agente hacia el comportamiento deseado de forma más eficiente, sin alterar cuál es la política óptima del problema. Típicamente introduce señales intermedias o penalizaciones estructuradas que hacen más informativo el gradiente de aprendizaje. Bajo una penalización de magnitud estática ($\lambda = 0$), la formulación matemática evalúa de idéntica manera abandonar a un solo cliente que abandonar a la totalidad de la demanda. Esto elimina el gradiente de mejora entre soluciones parciales y deja al modelo sin incentivos para incrementar gradualmente su cobertura. Sin embargo, la manifestación empírica de este defecto algorítmico no es automática, sino que depende directamente de la relación entre la magnitud de la penalización base ($R_{\text{base}}$) y el costo típico de las rutas. Para caracterizar este comportamiento, se ejecutó un barrido paramétrico de cuatro configuraciones sobre la instancia $p01$ (semilla $0$; $300.000$ pasos), cuyos resultados se detallan en la Tabla~\ref{tab:reward-hacking}. 
+
+%\eli{Javi, ¿basta con una sola semilla para concluir? Si no, puedes ejecutar varias, no necesariamente incluir el detalle de resultados, pero indicar que lo que muestra la tabla es representativo de los obtenido.}
+%\javi{holiii profe, en lugar de multi-semilla sobre p01, verifiqué la robustez del fenómeno replicándolo en otra instancia (p04). Los valores de las tablas son representativos del comportamiento observado}
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.15}
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabular}{@{}cccccc@{}}
+        \toprule
+        $R_{\text{fact}}$ & $-R_{\text{base}}$ & $\lambda$ & \textbf{Costo} & \textbf{Gap (\%)} & \textbf{Factible} \\
+        \midrule
+        $+100$ & $-500$ & $0$   & $576{,}18$ & $+9{,}8$   & sí (5 rutas) \\
+        $+100$ & $-100$ & $0$   & $4{,}47$   & $-99{,}1$  & NO (1 ruta) \\
+        $+100$ & $-50$  & $0$   & $142{,}92$ & $-72{,}8$  & NO (4 rutas) \\
+        $+100$ & $-50$  & $-50$ & $560{,}94$ & $+6{,}9$   & sí (5 rutas) \\
+        \bottomrule
+    \end{tabular}
+    \caption{\label{tab:reward-hacking} Barrido de configuraciones de la recompensa terminal sobre la instancia $p01$ (semilla 0, $50$ clientes). Fuente: Elaboración propia.}
+\end{table}
+
+%\eli{Primero presentemos la tabla y después concluimos lo importante.}
+%\javi{LISTO! agregué un párrafo que explica la tabla antes de concluir}
+
+La Tabla~\ref{tab:reward-hacking} reporta cuatro configuraciones de la recompensa terminal, cada una definida por el bono de factibilidad $R_{\text{fact}}$, la penalización base $R_{\text{base}}$ y el coeficiente de penalización proporcional $\lambda$. Para cada configuración se indica el costo de la solución obtenida, su gap respecto a la mejor solución conocida, si resultó factible o no y el número de rutas construidas. Las tres primeras filas mantienen $\lambda = 0$ (penalización de magnitud fija) variando la penalización base de $-500$ a $-50$, mientras que la última fila reintroduce la penalización proporcional ($\lambda = -50$) sobre la penalización base más baja. Esta disposición permite aislar el efecto de cada término sobre la factibilidad de la solución.
+
+Los datos revelan que el \textit{reward hacking} es un fenómeno condicional. Cuando la penalización base es grande respecto al costo típico de las rutas ($-500$), la factibilidad se sostiene por dominancia numérica incluso con $\lambda = 0$. Sin embargo, cuando la penalización base desciende al orden del costo típico ($-100$ o $-50$), el agente aprende políticas triviales de una o pocas rutas parciales cuyo retorno numérico resulta mejor que el de completar la solución, colapsando hacia soluciones infactibles. La reincorporación de la penalización proporcional ($\lambda = -50$) restaura la factibilidad incluso con una penalización base baja, ya que garantiza por diseño que abandonar más clientes sea siempre estrictamente peor que abandonar menos. La elección de $\lambda = -50$ adoptada en esta memoria se justifica, por tanto, como una decisión de robustez ante variaciones de otros hiperparámetros, y no como la corrección de un colapso observado en la configuración final.
+
+%\eli{¿Esto se podría replicar en los casos más grandes también?}
+%\javi{SIUUU! lo repliqué en p04 (75 clientes). El fenómeno se replica pero con otra forma: en p01 colapsaba a 1 ruta, en p04 a varias rutas parciales. La penalización proporcional rescata la factibilidad en ambas escalas}
+
+Para verificar que este fenómeno no es exclusivo de la escala base, se replicó el mismo experimento sobre la instancia $p04$ ($75$ clientes, red $[512,512]$, $500.000$ pasos). Los resultados, resumidos en la Tabla~\ref{tab:reward-hacking-p04}, confirman que el \textit{reward hacking} se manifiesta también en escalas mayores, aunque con una forma distinta: mientras en $p01$ el agente colapsaba hacia una única ruta trivial, en $p04$ el colapso se traduce en múltiples rutas parciales mal terminadas, con un costo agregado bajo pero infactible. En ambas escalas, la reincorporación de la penalización proporcional ($\lambda = -50$) restaura la factibilidad, lo que confirma que esta decisión de diseño es robusta a través de escalas y no un ajuste específico de la instancia base. 
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.15}
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabular}{@{}cccccc@{}}
+        \toprule
+        $R_{\text{fact}}$ & $-R_{\text{base}}$ & $\lambda$ & \textbf{Costo} & \textbf{Gap (\%)} & \textbf{Factible} \\
+        \midrule
+        $+100$ & $-500$ & $0$   & $6{,}00$    & $-99{,}3$ & NO (1 ruta) \\
+        $+100$ & $-50$  & $0$   & $233{,}84$  & $-72{,}0$ & NO (6 rutas) \\
+        $+100$ & $-50$  & $-50$ & $1144{,}70$ & $+37{,}0$ & sí (10 rutas) \\
+        \bottomrule
+    \end{tabular}
+    \caption{\label{tab:reward-hacking-p04} Replicación del barrido de recompensa terminal sobre la instancia $p04$ (semilla 0, $75$ clientes).}
+    \caption*{Fuente: Elaboración propia.}
+\end{table}
+
+Cabe precisar que los gaps negativos de las filas infactibles no indican que dichas soluciones superen al BKS. Son artefactos de soluciones parciales cuyo costo es artificialmente bajo por haber omitido visitas. Por ello, la factibilidad debe leerse siempre en conjunto con el gap, de forma análoga al análisis que se aplica a la instancia $p02$ en el Capítulo 4.
+
+%=============================================================%
+\subsubsection{Enmascaramiento de acciones} \label{sec:enmascaramientodeacciones}
+Uno de los mayores desafíos al aplicar Aprendizaje por Refuerzo a problemas con restricciones estrictas es evitar que el agente desperdicie entrenamiento explorando acciones inválidas. Para solucionarlo, se implementa un mecanismo dinámico de enmascaramiento de acciones (\textit{action masking}). Básicamente, en cada paso este filtro identifica cuáles son las opciones realmente posibles y obliga al agente a elegir exclusivamente entre ellas. Este enfoque ha demostrado ser una estrategia efectiva para incorporar restricciones en algoritmos de gradiente de política, siendo caracterizado en detalle por~\cite{HuangOntanon2020}.
+
+%\eli{¿alguna referencia de la literatura que lo use?}
+%\javi{Cité a Huang y Ontañón, que es el trabajo de referencia sobre invalid action masking en algoritmos de gradiente de política}
+
+Formalmente, en cada paso $t$ se construye una máscara binaria $m_{t} \in \{0,1\}^{N+1}$ tal que $m_{t}[a] = 1$ si la acción $a$ es factible en el estado $s_{t}$, y $m_{t}[a] = 0$ en caso contrario. El agente solo puede asignar probabilidad positiva a las acciones válidas. Las reglas para armar esta máscara y asegurar que se cumplan las restricciones operativas son las siguientes:
+
+\begin{itemize}
+    \item Si un cliente ya fue visitado hoy, se bloquea (enmascarado). Esto evita que el vehículo pase dos veces por el mismo lugar en un solo día. Lo que es infactible.
+
+    \item Si la demanda de un cliente es mayor que la capacidad que le queda al vehículo, también se enmascara. Así se asegura de no violar nunca la restricción de carga máxima.
+
+    \item Se bloquea la opción de \enquote{cerrar ruta} si el vehículo todavía no ha visitado a ningún cliente. Así se evita que el agente genere rutas vacías sin sentido.
+
+    \item Un cliente cuya cuota de visitas en el horizonte temporal ya esté satisfecha, según lo definido por su patrón, queda enmascarado de forma permanente para el resto del episodio.
+\end{itemize}
+
+Gracias a este filtro, cualquier ruta que arme el agente va a respetar sí o sí las reglas locales del PVRP. Esto reduce de manera importante el espacio de opciones que el agente tiene que explorar y acelera el entrenamiento. La Figura~\ref{fig:Enmascaramiento} muestra un ejemplo visual de cómo se aplica esta máscara en un estado concreto. Las acciones con $1$ están disponibles para ser elegidas, mientras que las que tienen $0$, ya sea por falta de capacidad o por visitas previas, quedan descartadas.
+
+Cabe destacar que este mecanismo permite  asegurar las restricciones del día a día (locales). Las metas globales, como lograr visitar a todos los clientes durante la semana, no se pueden garantizar con esta máscara y se incentivan únicamente a través de la recompensa final.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        topcell/.style={
+            draw=none,
+            fill=maskAction,
+            minimum width=0.8cm,
+            minimum height=0.8cm,
+            inner sep=0pt,
+            align=center,
+            font=\small
+        },
+        validcell/.style={
+            draw=none,
+            fill=maskValid,
+            minimum width=0.8cm,
+            minimum height=0.8cm,
+            inner sep=0pt,
+            align=center,
+            font=\small\bfseries
+        },
+        invalidcell/.style={
+            draw=none,
+            fill=maskInvalid,
+            minimum width=0.8cm,
+            minimum height=0.8cm,
+            inner sep=0pt,
+            align=center,
+            font=\small\bfseries
+        },
+        label/.style={
+            font=\small\bfseries,
+            anchor=east
+        },
+        symbol/.style={
+            font=\small,
+            anchor=east
+        }
+    ]
+    
+    \def\sep{1.05}
+
+    \node[label] at (-1.4, 0.7) {Acción};
+    \node[symbol] at (-0.65, 0.7) {$a_t$};
+    
+    \node[label] at (-1.4, -0.35) {Máscara};
+    \node[symbol] at (-0.65, -0.35) {$m_t$};
+    
+    \foreach \i/\valor in {0/0,1/1,2/2,3/3,4/4,5/5}{
+        \node[topcell] at (\i*\sep, 0.7) {\valor};
+    }
+
+    \node[validcell]   at (0*\sep, -0.35) {1};
+    \node[invalidcell] at (1*\sep, -0.35) {0};
+    \node[validcell]   at (2*\sep, -0.35) {1};
+    \node[invalidcell] at (3*\sep, -0.35) {0};
+    \node[validcell]   at (4*\sep, -0.35) {1};
+    \node[validcell]   at (5*\sep, -0.35) {1};
+    
+    \draw[line width=1pt] (-0.45, 0.17) -- (5.75, 0.17);
+
+    \foreach \k in {1,2,3,4,5}{
+        \draw[line width=1pt] ({(\k - 0.5)*\sep}, 1.15) -- ({(\k - 0.5)*\sep}, -0.8);
+    }
+    
+    \end{tikzpicture}
+    
+    \caption{\label{fig:Enmascaramiento} Ejemplo del mecanismo de enmascaramiento de acciones.}
+    \caption*{Fuente: Elaboración propia.}
+\end{figure}
+
+%=============================================================%
+\subsection{Arquitectura del agente} \label{sec:Arquitecturadelagente}
+%=============================================================%
+El agente propuesto se entrena mediante el algoritmo Proximal Policy Optimization (PPO)~\cite{Schulman2017} muy utilizado por ser estable y eficiente. Para integrar este entrenamiento con el filtro de acciones descrito en la Sección~\ref{sec:enmascaramientodeacciones}, se usa su variante \textit{Maskable PPO}~\cite{HuangOntanon2020}. Esta versión ya viene preparada para manejar restricciones de forma nativa, asegurando que el agente nunca asigne probabilidad a las acciones que la máscara marca como prohibidas. En la práctica, se emplea la implementación de Maskable PPO disponible en la librería \texttt{sb3-contrib} (versión $\geq 2{.}3{.}0$), una extensión de \textit{Stable-Baselines3}~\cite{Raffin2021}. Todo el desarrollo se realizó en Python $3{.}14$, apoyándose en \texttt{PyTorch} ($\geq 2{.}0$) como motor de las redes neuronales y en \texttt{Gymnasium} ($\geq 0{.}29$) para la interfaz del entorno de simulación.
+
+\eli{¿Esto es python? Incluir detalle, versión y referencia. También sería bueno contar con un repositorio de códigos}
+\javi{Profe, aclarado: es Python 3.14, uso sb3-contrib >= 2.3.0 (extensión de Stable-Baselines3, agregué su cita) sobre PyTorch y Gymnasium}
+
+%\eli{¿descrito en el estado del arte? o citar}
+%\eli{citar}
+%\javi{Cité a Schulman et al. (2017), el paper original de PPO. Si quiere puedo agregarlo en el EA, aunque PPO tiene su explicación en el glosario}
+ 
+A nivel estructural, tanto la política $\pi_{\theta}(a|s)$ como la función de valor $V_{\phi}(s)$ son redes neuronales completamente conectadas (\textit{Fully Connected}), cuyos fundamentos (neuronas, capas, pesos y funciones de activación) se presentaron en la Sección~\ref{sec:Aprendizajeporrefuerzo} del Capítulo 2. Para procesar mejor la información del estado, ambas redes comparten las primeras capas ocultas, como si fueran un solo \enquote{tronco} común. Luego, este tronco se divide en dos cabezas independientes. Una cabeza decide la política, es decir, qué acción tomar. La otra cabeza calcula el valor, es decir, qué tan bueno es el estado. Toda esta estructura se ilustra visualmente en la Figura~\ref{fig:Capas}, donde también se aprecia en qué punto entra en acción la máscara.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        font=\small,
+        box/.style={
+            draw=pvrpBorder,
+            rounded corners=4pt,
+            thick,
+            minimum width=2.2cm,
+            minimum height=1.55cm,
+            align=center
+        },
+        smallbox/.style={
+            draw=pvrpBorder,
+            rounded corners=4pt,
+            thick,
+            minimum width=2.1cm,
+            minimum height=1.45cm,
+            align=center
+        },
+        arrow/.style={
+            -{Latex[length=2.5mm]},
+            thick,
+            draw=pvrpBorder
+        }
+    ]
+    
+    \node[box, fill=stateFill] (estado) at (0,0)
+        {\textbf{Estado}\\[2pt] $s_t$\\[2pt] $204$};
+    
+    \node[box, fill=layerFill] (capa1) at (3.2,0)
+        {\textbf{Capa 1}\\[2pt] FC\\[2pt] $256$};
+    
+    \node[box, fill=layerFill] (capa2) at (6.4,0)
+        {\textbf{Capa 2}\\[2pt] FC\\[2pt] $256$};
+    
+    \node[smallbox, fill=policyFill] (politica) at (9.6,1.05)
+        {\textbf{Política}\\[2pt] $\pi_{\theta}(a \mid s)$\\[2pt] $N+1$};
+    
+    \node[smallbox, fill=valueFill] (valor) at (9.6,-1.15)
+        {\textbf{Valor}\\[2pt] $V_{\phi}(s)$\\[2pt] $1$};
+    
+    \draw[arrow] (estado.east) -- (capa1.west);
+    \draw[arrow] (capa1.east) -- (capa2.west);
+    
+    \draw[arrow] (capa2.east) -- (politica.west);
+    \draw[arrow] (capa2.east) -- (valor.west);
+
+    \node[text=gray, font=\small] at (4.8,-1.05) {tronco compartido};
+
+    \node[
+        draw=pvrpBorder,
+        dashed,
+        thick,
+        rounded corners=3pt,
+        fit=(politica),
+        inner xsep=0.22cm,
+        inner ysep=0.22cm
+    ] (maskbox) {};
+    
+    \node[font=\small] at ($(maskbox.north)+(0,0.28)$)
+        {máscara $m_t$ aplicada};
+    
+    \end{tikzpicture}
+    
+    \caption{\label{fig:Capas} Arquitectura de capas de la red del agente.}
+    \caption*{Fuente: Elaboración propia.}
+\end{figure}
+
+La Figura~\ref{fig:Capas} distingue cuatro tipos de bloques por color. El bloque lavanda de la izquierda representa el vector de estado $s_t$, de dimensión $204$ para la instancia $p01$. Los dos bloques beige centrales son las capas ocultas completamente conectadas de $256$ neuronas cada una, que conforman el tronco compartido de procesamiento. En el extremo derecho, el bloque verde superior corresponde a la cabeza de política $\pi_\theta(a \mid s)$, sobre la cual se aplica la máscara $m_t$ (delimitada por el recuadro discontinuo), y el bloque rosado inferior corresponde a la cabeza de valor $V_\phi(s)$, un escalar que PPO utiliza para estimar el retorno esperado del estado.
+
+%\eli{Indicar qué es cada caja usando sus colores.} \javi{Listo, agregué un párrafo que describe cada bloque de la figura por su color.}
+%%
+
+Formalmente, la cabeza de política produce un vector de puntajes (\textit{logits}) $z(s) \in \mathbb{R}^{|\mathcal{A}|}$, uno por cada acción posible. Para garantizar que el agente nunca seleccione una acción inválida, estos puntajes se combinan con la máscara $m_t \in \{0,1\}^{|\mathcal{A}|}$ antes de calcular las probabilidades: a las acciones prohibidas se les asigna un puntaje de $-\infty$, de modo que su probabilidad resultante sea nula. La política enmascarada se obtiene entonces mediante una función \textit{softmax} sobre los puntajes ajustados:
+\begin{equation}
+    \label{eq:politica_enmascarada}
+    \pi_{\theta}(a \mid s) =
+    \frac{\exp\!\big(z_a(s) + \mu_a\big)}
+         {\sum_{a' \in \mathcal{A}} \exp\!\big(z_{a'}(s) + \mu_{a'}\big)},
+    \qquad
+    \mu_a =
+    \begin{cases}
+        0 & \text{si } m_t[a] = 1 \ (\text{acción válida}),\\
+        -\infty & \text{si } m_t[a] = 0 \ (\text{acción bloqueada}).
+    \end{cases}
+\end{equation}
+
+De esta forma, la máscara actúa directamente sobre la distribución de probabilidad de la política, asegurando por construcción que $\pi_{\theta}(a \mid s) = 0$ para toda acción bloqueada, evitando tener que descartar acciones inválidas más adelante.
+%%
+
+%\eli{Creo que falta más detalle. Algún esquema y las fórmulas relacionadas al proceso ayudarían a entender mejor. No explicamos redes en el estado del arte, ¿no?}
+%\javi{LISTOO agregué la explicación de redes al estado del arte (Cap 2) y desde acá la referencio. También sumé la fórmula de cómo la red produce la política enmascarada}
+
+Antes de presentar los valores adoptados, conviene detallar el significado de los hiperparámetros que gobiernan el entrenamiento. La \textit{arquitectura de red} indica el número y tamaño de las capas ocultas. La \textit{tasa de aprendizaje} controla la magnitud del paso con que se actualizan los pesos en cada iteración. El \textit{factor de descuento} $\gamma$ regula el peso relativo que se otorga a las recompensas futuras frente a las inmediatas. El \textit{coeficiente de entropía} pondera el término que fomenta la exploración, penalizando políticas que se vuelven deterministas de forma prematura. Finalmente, el \textit{tamaño de lote} corresponde al número de muestras procesadas en cada actualización de la red. 
+
+%\eli{Creo que es necesario definir la red para entender qué significa el resto de los parámetros de la tabla. Desde arquitectura a tamaño de lote.} 
+%\javi{LISTOOOO!! agregué un párrafo previo a la tabla que define cada hiperparámetro: arquitectura, tasa de aprendizaje, factor de descuento, coeficiente de entropía y tamaño de lote}
+
+%%
+La configuración de referencia se determinó mediante un proceso iterativo de calibración manual sobre la instancia base $p01$ ($50$ clientes), guiado por la evolución de la tasa de factibilidad y del gap respecto al BKS. Se exploraron combinaciones de arquitecturas $[64,64]$, $[128,128]$ y $[256,256]$, coeficientes de entropía en $\{0{,}01,\ 0{,}03,\ 0{,}05,\ 0{,}1\}$ y presupuestos de entrenamiento entre $100.000$ y $500.000$ pasos. Este proceso de calibración se realizó utilizando una única semilla, lo que constituye la práctica habitual en Aprendizaje por Refuerzo aplicado, dado el elevado costo computacional que implicaría un barrido multi-semilla completo. La reproducibilidad de la configuración adoptada se verificó a posteriori mediante la evaluación multi-semilla presentada en el Capítulo 4, donde las desviaciones estándar acotadas (en el rango $\pm 5\%$ a $\pm 7\%$) confirman que el desempeño obtenido no depende de la semilla particular empleada durante la calibración. 
+%%
+
+%\eli{Por lo mismo tal vez hay que incluir el detalle del proceso en el capítulo de validación, ¿no? ¿Cambian nuestros resultados si hacemos este análisis con otra instancia de referencia? ¿Podríamos hacerlo con alguna de las más grandes, por ejemplo?}
+%\javi{Reformulé el párrafo!!}
+
+%\eli{¿qué otros valores posibles se testearon? Si hay valores recomendados en la literatura, hay que incluir las citas correspondientes. ¿Qué tan sistemático fue el proceso? ¿Cuántas combinaciones se probaron? ¿Qué indicador de calidad se usó para comparar? ¿Cuánto tiempo tomó el proceso? Esto es como la sintonización de metaheurísticas. Probablemente lo que se ha hecho en el área puede servir para mejorar/avalar el proceso.} 
+%\javi{Reformulé el párrafo!! Ahora describe el proceso: las combinaciones de arquitectura, entropía y pasos que se probaron, el indicador usado para comparar (factibilidad + gap sobre p01)}
+
+\begin{table}[H]
+    \centering
+    \caption{\label{table:Hiperparametro} Hiperparámetros utilizados en el entrenamiento del agente.}
+    \caption*{Fuente: Elaboración propia.}
+    \renewcommand{\arraystretch}{1.12}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{@{}lcl@{}}
+        \toprule
+        \textbf{Hiperparámetro} & \textbf{Valor} & \textbf{Observación} \\
+        \midrule
+
+        Algoritmo & Maskable PPO & Variante con soporte nativo de enmascaramiento \\
+        Arquitectura de red & $[256, 256]$ & Dos capas ocultas completamente conectadas \\
+        Función de activación & Tanh & Estándar en políticas categóricas \\
+        Coeficiente de entropía & $0{,}05$ & Por sobre el valor por defecto $(0{,}01)$ \\
+        Tasa de aprendizaje & $3 \times 10^{-4}$ & Valor estándar de PPO \\
+        Factor de descuento $\gamma$ & $0{,}99$ & Estándar para episodios finitos \\
+        Pasos de entrenamiento & $300\,000$ & Garantiza convergencia en la escala base \\
+        Tamaño de lote & $64$ & Estándar de la implementación \\
+
+        \bottomrule
+    \end{tabular}%
+    }
+\end{table}
+
+De todos estos hiperparámetros, hubo dos decisiones de configuración que resultaron determinantes para el buen desempeño del modelo. Primero, usar capas de $256$ neuronas, mayores que las que trae por defecto la política \texttt{MlpPolicy} de Stable Baselines 3, que emplea dos capas de $64$ neuronas. Este aumento otorga a la red la capacidad necesaria para procesar toda la información que trae el vector de estado del PVRP. Segundo, subir el coeficiente de entropía a $0{,}05$, lo que obligó al agente a explorar más al principio del entrenamiento, evitando que se estancara prematuramente en óptimos locales.
+
+%\eli{¿dónde vienen por defecto?} 
+%\javi{ACLARADOOOOO los valores por defecto son los de la MlpPolicy de Stable Baselines 3 (dos capas de 64 neuronas)}
+
+Adicionalmente, al probar este modelo en instancias con más clientes, se identificó que la configuración de la red debe escalar de manera proporcional a la dimensionalidad del problema. Las instancias con una mayor cantidad de clientes generan vectores de estado más grandes y episodios de construcción de rutas más extensos, lo que demanda una mayor capacidad de representación paramétrica y más pasos de entrenamiento para aprender. La Tabla~\ref{table:Config} muestra las tres configuraciones adoptadas según la escala de la instancia. La configuración base fue calibrada sobre $p01$ ($50$ clientes), para las instancias de $75$ y $100$ clientes, el vector de estado crece a $304$ y $404$ dimensiones respectivamente, lo que motivó ampliar la red a $[512, 512]$ y aumentar el presupuesto de entrenamiento a $500.000$ pasos. Este escalamiento es una decisión de diseño necesaria, ya que la configuración base resultó insuficiente en las escalas mayores, produciendo gaps deteriorados sin justificación estructural. 
+
+%\eli{eventualmente pueden necesitar más aún, ¿no? Dado que se quedan con los valores máximos evaluados, ¿todos estos parámetros fueron obtenidos con un proceso que considera varias semillas?}
+%\javi{Profe!! respondo las dos partes: la calibración se hizo con una sola semilla (lo explico en el párrafo de arriba, y la reproducibilidad la validé después con multi-semilla en el Cap 4). Y sobre si podrían necesitar más: el análisis de sensibilidad que agregué más abajo (barrido en p04) muestra justamente que valores más altos de red no siempre mejoran, hay un trade-off}
+
+%\eli{Explicar el contenido de la tabla. } 
+%\javi{LISTOOOOO!! agregué la explicación del contenido de la tabla: qué significa cada configuración y por qué la red debe crecer con el tamaño del estado.}
+
+\begin{table}[H]
+    \centering
+    \caption{\label{table:Config} Configuración experimental según escala de instancia.}
+    \caption*{Fuente: Elaboración propia.}
+    \normalsize
+    \setlength{\tabcolsep}{10pt}
+    \renewcommand{\arraystretch}{1.12}
+    \begin{tabular}{@{}ccccc@{}}
+        \toprule
+        \textbf{Escala} & \textbf{Clientes} & \textbf{Dim. estado} & \textbf{Arq. red} & \textbf{Pasos} \\
+        \midrule
+        Base        & $50$  & $204$ & $[256, 256]$ & $300\,000$ \\
+        Intermedia  & $75$  & $304$ & $[512, 512]$ & $500\,000$ \\
+        Mayor       & $100$ & $404$ & $[512, 512]$ & $500\,000$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+%%
+Una pregunta metodológica relevante es si la configuración adoptada es robusta frente a la elección de la instancia base, o si por el contrario resulta idiosincrática de $p01$. Para responderla empíricamente se ejecutó un barrido sistemático de calibración tomando $p04$ ($75$ clientes) como instancia de referencia, evaluando un grid de tres arquitecturas ($[256,256]$, $[512,512]$, $[768,768]$) por tres coeficientes de entropía ($0{,}01$, $0{,}05$, $0{,}1$), para un total de nueve configuraciones entrenadas con $500.000$ pasos. La Tabla~\ref{tab:barrido-p04} resume los resultados.
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.15}
+    \setlength{\tabcolsep}{7pt}
+    \begin{tabular}{@{}llccc@{}}
+        \toprule
+        \textbf{Arquitectura} & \textbf{Ent. coef.} & \textbf{Costo} & \textbf{Gap (\%)} & \textbf{Factible} \\
+        \midrule
+        $[256,256]$ & $0{,}01$ & $1041{,}60$ & $+24{,}7$ & sí \\
+        $[256,256]$ & $0{,}05$ & $1470{,}62$ & $+76{,}0$ & sí \\
+        $[256,256]$ & $0{,}10$ & $1541{,}47$ & $+84{,}5$ & NO \\
+        $[512,512]$ & $0{,}01$ & $1189{,}82$ & $+42{,}4$ & sí \\
+        $[512,512]$ & $0{,}05$ & $1201{,}84$ & $+43{,}9$ & sí \\
+        $[512,512]$ & $0{,}10$ & $1196{,}05$ & $+43{,}2$ & NO \\
+        $[768,768]$ & $0{,}01$ & $1149{,}60$ & $+37{,}6$ & sí \\
+        $[768,768]$ & $0{,}05$ & $1299{,}99$ & $+55{,}6$ & sí \\
+        $[768,768]$ & $0{,}10$ & $1309{,}97$ & $+56{,}8$ & sí \\
+        \bottomrule
+    \end{tabular}
+    \caption{\label{tab:barrido-p04} Barrido de calibración sobre la instancia $p04$ (semilla 0, $75$ clientes, $500.000$ pasos).}
+    \caption*{Fuente: Elaboración propia.}
+\end{table}
+
+Del barrido emergen dos patrones consistentes. Primero, un coeficiente de entropía bajo ($0{,}01$) favorece sistemáticamente el gap medio en las tres arquitecturas, mientras que un valor alto ($0{,}10$) tiende a desestabilizar el entrenamiento, produciendo soluciones infactibles en dos de las tres configuraciones. Segundo, la mejor configuración sobre $p04$ ($[256,256]$ con entropía $0{,}01$) no coincide con la adoptada como referencia general ($[512,512]$ con entropía $0{,}05$), lo que sugiere que la calibración óptima no es universal, sino que depende de la instancia base empleada.
+
+No obstante, este resultado debe interpretarse con cautela, ya que los valores del barrido corresponden a una única semilla. Para evaluar si la aparente superioridad de la configuración $[256,256]$ con entropía $0{,}01$ se sostiene, se ejecutó una verificación multi-semilla de dicha candidata sobre $p04$, contrastándola con la configuración adoptada bajo el mismo protocolo. La Tabla~\ref{tab:multisemilla-p04} presenta la comparación.
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.15}
+    \setlength{\tabcolsep}{8pt}
+    \begin{tabular}{@{}lccc@{}}
+        \toprule
+        \textbf{Configuración} & \textbf{Gap medio} & \textbf{Rango} & \textbf{Factible} \\
+        \midrule
+        Candidata $[256,256]$, ent. $0{,}01$ & $+41{,}9\% \pm 11{,}4\%$ & $[+24{,}7\%,\ +55{,}5\%]$ & $5/5$ \\
+        Adoptada $[512,512]$, ent. $0{,}05$  & $+53{,}9\% \pm 5{,}4\%$  & $[+43{,}9\%,\ +58{,}9\%]$ & $5/5$ \\
+        \bottomrule
+    \end{tabular}
+    \caption{\label{tab:multisemilla-p04} Comparación multi-semilla ($5$ semillas) sobre $p04$ entre la configuración candidata y la adoptada.}
+    \caption*{Fuente: Elaboración propia.}
+\end{table}
+
+La comparación revela un \textit{trade-off} entre calidad media y estabilidad. Si bien la configuración candidata alcanza un gap medio inferior ($+41{,}9\%$ frente a $+53{,}9\%$), lo hace con una desviación estándar más del doble de amplia ($\pm 11{,}4\%$ frente a $\pm 5{,}4\%$), y sus rangos de desempeño se solapan con los de la configuración adoptada. En otras palabras, la candidata es en promedio mejor, pero considerablemente más volátil: en algunas semillas produce soluciones muy buenas y en otras claramente peores. La configuración adoptada, en cambio, ofrece un comportamiento más predecible, una propiedad deseable de cara a un despliegue operativo donde la consistencia de los resultados es tan relevante como su calidad media. Por este motivo se mantiene la configuración original como referencia del estudio. Una calibración multi-semilla exhaustiva por instancia, que caracterice de forma rigurosa este trade-off en todas las escalas, se plantea como una línea de trabajo futuro. %\eli{Por lo mismo tal vez hay que incluir el detalle del proceso en el capítulo de validación... ¿Cambian nuestros resultados si hacemos este análisis con otra instancia de referencia?} \javi{Sí profe, lo probé empíricamente: hice un barrido completo sobre p04 (Tabla~\ref{tab:barrido-p04}) y verifiqué la mejor candidata con multi-semilla (Tabla~\ref{tab:multisemilla-p04}). El resultado: la calibración óptima sí depende de la instancia, pero hay un trade-off calidad-estabilidad, y la config adoptada es la más estable. Lo dejo como análisis de sensibilidad y trabajo futuro.}
+%%
+
+%\eli{Desde acá debiera ir en el capítulo de validación.}
+%\eli{Probablemente lo primero que deba ir en ese capítulo es la descripción de los casos de prueba. }
+%\javi{Movido, profe!!! Los métodos de comparación y evaluación ahora abren el Capítulo 4. Aquí en el Cap 3 se mantiene solo la arquitectura del agente}

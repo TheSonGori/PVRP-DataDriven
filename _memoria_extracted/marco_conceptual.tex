@@ -1,0 +1,140 @@
+\secnumbersection{MARCO CONCEPTUAL}\label{sec:lol}
+%=============================================================%
+\subsection{Marco teórico}
+%=============================================================%
+El Vehicle Routing Problem (VRP) es uno de los problemas más estudiados en el área de optimización combinatoria. Su objetivo consiste en establecer una configuración óptima de rutas que permita a una flota de vehículos abastecer a una red de clientes, con el fin de minimizar el costo total de transporte, la distancia o el tiempo de viaje, mientras se satisfacen diversas restricciones operacionales~\cite{EKSIOGLU20091472}.
+
+Desde su formulación inicial, el VRP ha evolucionado debido a la creciente complejidad de los sistemas logísticos modernos. Diversas variantes del problema han sido propuestas para modelar de forma más realista las condiciones operativas en sistemas de distribución, incorporando restricciones como capacidades limitadas de los vehículos, ventanas de tiempo para la atención de clientes, múltiples depósitos o demandas estocásticas~\cite{EKSIOGLU20091472}, entre otras. Estas extensiones han permitido que el VRP sea aplicado en una amplia variedad de contextos industriales, incluyendo logística urbana, distribución de mercancías, recolección de residuos y servicios de transporte.
+
+Debido a su elevada complejidad computacional, tanto el VRP como sus variantes han sido ampliamente estudiados mediante diversas estrategias de resolución. En particular, se ha demostrado que el VRP pertenece a la clase de problemas NP-hard, lo que implica que el uso de algoritmos exactos resulta inviable para instancias de gran escala. Por consiguiente, gran parte de los estudios se ha centrado en el desarrollo de métodos aproximados capaces de generar soluciones de alta calidad en tiempos computacionales razonables~\cite{EKSIOGLU20091472}.
+
+Los estudios recientes sugieren una transición progresiva desde estos enfoques de optimización clásicos hacia métodos híbridos que combinan técnicas tradicionales con acercamientos data-driven, permitiendo abordar problemas logísticos cada vez más dinámicos y complejos. A continuación, se detallará la evolución de estos conceptos, partiendo desde el problema clásico y su variante periódica (PVRP), hasta llegar a las metodologías de resolución basadas en heurísticas y, más recientemente, en el aprendizaje por refuerzo (RL).
+
+%=============================================================%
+\subsubsection{Optimización combinatoria} \label{sec:Optimizacioncombinatoria}
+La optimización combinatoria es una rama de las matemáticas aplicadas enfocada en encontrar la mejor solución posible dentro de un conjunto finito de configuraciones. En estos problemas, las variables de decisión son discretas y el propósito central es minimizar o maximizar una función objetivo, asegurando al mismo tiempo el cumplimiento de un conjunto de restricciones operacionales~\cite{bengio2020machinelearningcombinatorialoptimization}.
+
+La gran mayoría de los desafíos logísticos y de transporte caen bajo este marco matemático. El Vehicle Routing Problem (VRP) y sus diversas extensiones son ejemplos clásicos de este campo, el espacio de soluciones está compuesto por todas las combinaciones posibles de rutas que pueden trazarse para abastecer a una red de clientes. 
+
+La característica que define y complica estos problemas es su explosión combinatoria. A medida que aumenta el tamaño de la instancia (más clientes, más vehículos o más días de planificación), el número de soluciones posibles crece de manera exponencial. Esta barrera estructural es la que vuelve inviables a los algoritmos exactos para problemas de escala real, forzando históricamente el uso de heurísticas aproximadas para encontrar resultados de buena calidad en tiempos prudentes.
+
+Sin embargo, en los últimos años ha surgido una convergencia tecnológica que busca romper esta limitación matemática. La integración de modelos de aprendizaje automático con algoritmos tradicionales ha dado origen a la \textit{learning-based combinatorial optimization}\footnote{La optimización combinatoria basada en aprendizaje integra modelos de aprendizaje automático en algoritmos tradicionales para mejorar la toma de decisiones, reemplazando cálculos intensivos por inferencias rápidas y adaptativas.}~\cite{bengio2020machinelearningcombinatorialoptimization}. Esta nueva línea de investigación no busca probar todas las combinaciones, sino que aprovecha los patrones estructurales ocultos en los datos del problema para \enquote{guiar} el proceso de búsqueda hacia las mejores zonas del espacio de soluciones de forma mucho más directa.
+
+%=============================================================%
+\subsubsection{Aprendizaje por refuerzo} \label{sec:Aprendizajeporrefuerzo}
+En el campo del aprendizaje automático, el Aprendizaje por Refuerzo (Reinforcement Learning o RL) se posiciona como el marco teórico ideal para materializar esta optimización basada en la experiencia. A diferencia de otras ramas de la inteligencia artificial que aprenden memorizando ejemplos históricos, en el RL un \enquote{agente} aprende de forma autónoma interactuando mediante ensayo y error con un entorno dinámico. El agente observa la situación actual, toma una decisión y recibe una retroalimentación del entorno. Su objetivo algorítmico es descubrir la estrategia o política de decisión que maximice su recompensa acumulada a largo plazo~\cite{SuttonBarto2014}.
+
+Formalmente, este proceso de aprendizaje se modela como un Proceso de Decisión de Markov (MDP). Un MDP se estructura sobre cuatro componentes matemáticos: un espacio de estados, un conjunto de acciones, una función de transición y una función de recompensa. En cada paso, la elección del agente no solo determina el beneficio inmediato, sino que altera el estado futuro del sistema, obligándolo a planificar con visión a futuro.
+
+Esta capacidad para manejar problemas de decisión secuencial es la gran fortaleza del RL frente a la optimización combinatoria~\cite{bengio2020machinelearningcombinatorialoptimization}. Armar una ruta logística no es un evento de un solo paso; es una sucesión continua de micro-decisiones (qué cliente visitar primero, cuál después, cuándo retornar al depósito). Bajo el enfoque del RL, el agente aprende a construir estas soluciones de manera progresiva. En lugar de depender de heurísticas o reglas humanas inyectadas en el código para decidir el próximo paso, el agente aprende las reglas del juego directamente desde la experiencia, ajustando su comportamiento hasta descubrir cómo ensamblar las rutas más eficientes posibles~\cite{bengio2020machinelearningcombinatorialoptimization, SuttonBarto2014}.
+
+% NUEVOS PARRAFOS %
+%\javi{Profe! agregué la explicación de qué es una red neuronal (neuronas, capas, pesos, activación, entrenamiento) con la fórmula de la neurona, citando el libro Deep Learning de Goodfellow. Así los hiperparámetros del Cap 3 se entienden desde acá}
+
+Ahora bien, para que un agente pueda representar políticas de decisión complejas como las que exige el ruteo, se requiere una estructura capaz de aproximar funciones no lineales a partir de la experiencia. Esa estructura es la \textit{red neuronal artificial}. Una red neuronal es un modelo computacional inspirado en la organización del cerebro, compuesto por unidades de procesamiento llamadas \textit{neuronas}, organizadas en capas: una capa de entrada que recibe los datos, una o más capas ocultas que los procesan, y una capa de salida que entrega el resultado~\cite{Goodfellow2016}.
+
+Cada neurona realiza una operación simple. Recibe un conjunto de entradas $x_1, x_2, \dots, x_n$, las pondera mediante un vector de \textit{pesos} $w_1, w_2, \dots, w_n$ ajustables, les suma un sesgo $b$, y aplica una \textit{función de activación} $\sigma$ que introduce no linealidad. Formalmente, la salida $y$ de una neurona se expresa como:
+
+\begin{equation}
+    \label{eq:neurona}
+    y = \sigma\left( \sum_{i=1}^{n} w_i x_i + b \right).
+\end{equation}
+
+La función de activación $\sigma$ es la que permite a la red aprender relaciones complejas y no lineales. Las funciones habituales son la tangente hiperbólica (\textit{Tanh}) y la unidad lineal rectificada (\textit{ReLU}). Los pesos $w_i$ y los sesgos $b$ constituyen los \textit{parámetros} de la red y son precisamente los valores que el proceso de entrenamiento ajusta.
+
+El aprendizaje consiste en modificar estos parámetros para que la salida de la red se acerque cada vez más al comportamiento deseado. Esto se logra evaluando el error de las predicciones mediante una función objetivo y propagando ese error hacia atrás a través de las capas (\textit{backpropagation}), lo que permite calcular en qué dirección ajustar cada peso. Con estos gradientes, un algoritmo de optimización actualiza los parámetros paso a paso. La magnitud de cada uno de estos pasos está controlada por un hiperparámetro llamado \textit{tasa de aprendizaje}. La cantidad y el tamaño de las capas ocultas definen la \textit{arquitectura} de la red y determinan su capacidad de representación: redes más grandes pueden capturar patrones más complejos, a costa de un entrenamiento más exigente~\cite{Goodfellow2016}.
+
+% AQUI TERMINAN LOS NUEVOS PARRAFOS %
+
+Para que el agente logre aprender esta política, los métodos modernos entrenan dos redes al mismo tiempo: una función de política $\pi_\theta(a \mid s)$, que decide qué acción tomar con base en las probabilidades; y una función de valor $V_\phi(s)$, que evalúa qué tan bueno es el estado en el que se encuentra. A esta estructura se le conoce como \textit{actor-crítico}. En la práctica, la función de valor actúa como un crítico que guía al actor, dándole una señal de referencia que estabiliza y acelera todo el proceso de aprendizaje ~\cite{SuttonBarto2014}.
+
+Además, como el agente aprende exclusivamente de su propia experiencia, enfrenta un dilema constante: debe equilibrar la exploración, que es atreverse a probar acciones nuevas para descubrir mejores estrategias con la explotación, ir a la segura y usar el conocimiento adquirido para asegurar su recompensa. Para controlar este balance, la función objetivo del entrenamiento incorpora un término de entropía. En palabras simples, esto castiga al agente si se vuelve demasiado predecible o rígido muy rápido, obligándolo a seguir evaluando distintas alternativas antes de casarse con una estrategia definitiva.
+
+
+%=============================================================%
+\subsubsection{Enfoques Data-Driven} \label{sec:EnfoquesData-Driven}
+El proceso de aprendizaje descrito en la sección anterior requiere de una materia prima fundamental para funcionar: la información. Los enfoques data-driven (guiados por datos) en optimización representan un cambio de paradigma en la forma de abordar problemas complejos. En lugar de depender exclusivamente de modelos matemáticos rígidos y supuestos teóricos que muchas veces no se cumplen en la realidad, estas metodologías extraen patrones y estrategias de decisión directamente a partir de registros históricos o interacciones en entornos simulados~\cite{bertsimas2018predictiveprescriptiveanalytics}.
+
+En el contexto de la investigación de operaciones, la aparición de los enfoques data-driven ha consolidado la transición hacia la analítica prescriptiva. Ya no es suficiente con construir modelos que simplemente anticipen lo que va a ocurrir, el verdadero valor radica en sistemas capaces de recomendar proactivamente qué acciones tomar para optimizar la operación frente a ese escenario previsto~\cite{bertsimas2018predictiveprescriptiveanalytics}. La integración de técnicas de aprendizaje automático con la teoría de optimización es precisamente lo que permite dar este salto.
+
+Para la industria logística, la ventaja crítica de una arquitectura guiada por datos es su resiliencia frente a la incertidumbre. En el mundo real, los sistemas de distribución habitan en entornos altamente dinámicos donde factores como variaciones de demanda de último minuto, congestión vehicular o problemas en la flota cambian el panorama constantemente. Un enfoque estático tradicional requiere ser rediseñado cuando el entorno cambia. Un enfoque data-driven permite que el sistema asimile la nueva información y ajuste sus reglas de decisión de forma orgánica, manteniendo operaciones eficientes frente a condiciones cambiantes~\cite{bertsimas2018predictiveprescriptiveanalytics}.
+
+%=============================================================%
+\subsection{Estado del arte} \label{Estadodelarte}
+%=============================================================%
+
+%=============================================================%
+\subsubsection{Vehicle Routing Problem} \label{sec:VehicleRoutingProblem}
+Introducido originalmente por Dantzig y Ramser en 1959, el Vehicle Routing Problem (VRP) se formuló como una generalización del clásico Problema del Vendedor Viajero (Traveling Salesperson Problem, TSP). En su versión más simple, el modelo asume la existencia de un depósito central, una flota de vehículos homogénea y un conjunto de clientes dispersos geográficamente. El objetivo radica en diseñar un conjunto de rutas cerradas que comiencen y terminen en el depósito, garantizando que cada cliente sea visitado exactamente una vez, de modo que se minimice la distancia total recorrida~\cite{Pangaribuan}.
+
+A medida que los sistemas de distribución comercial han madurado, los supuestos del modelo clásico han resultado insuficientes para capturar las condiciones operacionales del mundo real. Por ende, la literatura ha extendido el modelo base para incorporar diversas restricciones prácticas. Entre las variantes más relevantes destacan:
+
+\begin{itemize}
+    \item \textbf{CVRP (Capacitated VRP):} Constituye la extensión principal del problema, incorporando restricciones estrictas sobre la capacidad máxima de carga que cada vehículo puede transportar~\cite{EKSIOGLU20091472}.
+    
+    \item \textbf{VRPTW (VRP with Time Windows):} Exige que el servicio a cada cliente se realice dentro de un intervalo de tiempo específico o \enquote{ventana temporal}, prohibiendo las llegadas tempranas y tardías.
+    
+    \item \textbf{MDVRP (Multi-Depot VRP):} Esta variante contempla múltiples depósitos desde donde los vehículos pueden iniciar su recorrido.
+    
+    \item \textbf{SDVRP (Split Delivery VRP):} En este enfoque se relaja la restricción de visita única, permitiendo que la demanda de un cliente sea atendida por más de un vehículo~\cite{Pangaribuan}.
+    
+    \item \textbf{PVRP (Periodic VRP):} Extiende el horizonte de planificación de un único día a múltiples periodos. Requiere que cada cliente reciba un número específico de visitas, lo que  introduce flexibilidad y restricciones en la programación de los días de atención~\cite{HEMMELMAYR2009791}.
+\end{itemize}
+
+Mientras que gran parte de estas extensiones se centra en cómo organizar las rutas en un día estático, el PVRP suma un nuevo desafío: la necesidad de planificar en un horizonte temporal de varios días. Como este problema es la base de esta memoria, a continuación se explican en detalle sus características y la complejidad que conlleva.
+
+%=============================================================%
+\subsubsection{Periodic Vehicle Routing Problem} \label{sec:PeriodicVehicleRoutingProblem}
+El Periodic Vehicle Routing Problem (PVRP) es la extensión natural del modelo clásico cuando la operación logística no se limita a un solo día, sino que abarca un horizonte temporal continuo, como puede ser una semana o un mes. A diferencia del VRP tradicional, donde basta con visitar a cada cliente una sola vez, en el PVRP los clientes tienen una frecuencia de visitas requerida~\cite{HEMMELMAYR2009791}. Esto significa que el modelo ya no solo debe responder a la pregunta de \enquote{cómo llegar}, sino también a la pregunta de \enquote{cuándo ir}.
+
+A nivel estructural, esta característica convierte al PVRP en un problema de optimización de dos grandes niveles. En una primera etapa, el sistema debe armar el calendario de visitas, asignando a cada cliente un patrón de días específico dentro del horizonte. Una vez que los días están definidos, la segunda etapa consiste en resolver un ruteo espacial para cada jornada, construyendo las rutas solo con los clientes programados para ese día~\cite{Francis, HEMMELMAYR2009791}. 
+
+El gran desafío radica en que el costo final del sistema es la suma de todas las rutas generadas en el horizonte completo. Por lo tanto, estas dos etapas están profundamente conectadas: una mala asignación de los días de visita arruinará la eficiencia de las rutas diarias. Al combinarlas decisiones temporales y espaciales, el espacio de soluciones crece drásticamente respecto al VRP clásico, con las consecuencias sobre la complejidad computacional ya discutidas en la Sección \ref{sec:Complejidaddelproblema} ~\cite{EKSIOGLU20091472}.
+
+En la práctica, dominar este modelo es esencial para industrias que operan mediante entregas o recolecciones rutinarias, como la gestión de residuos sólidos, el abastecimiento continuo de supermercados o la reposición de inventarios~\cite{Pangaribuan}. Para capturar con aún más precisión estas operaciones, el modelo base se ha seguido extendiendo incorporando, entre otros, ventanas de tiempo o flotas con capacidades distintas~\cite{HEMMELMAYR2009791}. Sin embargo, debido a su alta complejidad estructural, la comunidad científica ha tenido que alejarse de los métodos exactos y diseñar técnicas de resolución especializadas, comenzando históricamente por los enfoques heurísticos y metaheurísticos.
+
+%=============================================================%
+\subsubsection{Métodos heurísticos y metaheurísticos para PVRP} \label{sec:Metodos}
+Debido a la intratabilidad de los métodos exactos, se han desarrollado alternativas más pragmáticas. Inicialmente, las investigaciones se apoyaron en algoritmos heurísticos, como el clásico algoritmo de Clarke y Wright. Estos métodos funcionan aplicando reglas lógicas deductivas para construir soluciones factibles rápido. El problema es que estos algoritmos suelen quedarse atrapados en \enquote{óptimos locales}. Es decir, no pueden continuar el proceso de búsqueda una vez encontrada una solución aceptable. Para superar esta barrera, nacieron las metaheurísticas: marcos de optimización más inteligentes y robustos que incorporan estrategias para explorar y explotar metódicamente el espacio de soluciones. Algoritmos como los Genéticos (GA), Optimización por Enjambre de Partículas (PSO) y Colonias de Hormigas (ACO) demostraron ser sumamente efectivos para abordar problemas de ruteo a gran escala~\cite{EKSIOGLU20091472, Pangaribuan}.
+
+Cuando estas técnicas se aplican a la complejidad del ruteo periódico (PVRP), la metaheurística que destaca por sobre el resto es la Búsqueda de Entorno Variable (Variable Neighborhood Search, VNS). Su éxito en esta variante no es casualidad: el VNS basa su estrategia en alternar sistemáticamente entre diferentes estructuras de \enquote{vecindad}. Esta mecánica es ideal para lidiar con la doble toma de decisiones del PVRP, ya que el algoritmo puede usar un operador para cambiar el patrón de días de un cliente (exploración temporal) y, en la misma iteración, usar un operador distinto para reordenar la ruta de un camión en un día específico (mejora espacial)~\cite{HEMMELMAYR2009791}. 
+
+Sin embargo, a pesar de su innegable efectividad histórica, las metaheurísticas presentan un problema importante de cara a la logística moderna. Su rendimiento depende casi por completo de un diseño manual exhaustivo por parte de un experto. Requieren programar reglas fijas, crear operadores de vecindad adecuados y demandan una calibración de parámetros detallada y adaptada a cada conjunto de datos~\cite{EKSIOGLU20091472}. 
+
+Esta rigidez operativa significa que si el entorno logístico cambia o la empresa enfrenta un nuevo escenario, el algoritmo no tiene la capacidad de adaptarse por sí solo; debe ser recalibrado por un humano. Como respuesta a este problema, ha surgido un fuerte interés en sustituir estas reglas diseñadas manualmente por estrategias autónomas, abriendo la puerta a los enfoques guiados por datos y al aprendizaje automático~\cite{Pangaribuan}.
+
+%=============================================================%
+\subsubsection{Aplicaciones de Machine Learning y Reinforcement Learning en problemas de ruteo} \label{sec:Aplicaciones}
+Como respuesta a la rigidez y fuerte dependencia humana de las metaheurísticas, la tendencia actual de la investigación apunta hacia métodos guiados por datos. En este escenario, el aprendizaje por refuerzo (RL) ha emergido como una de las alternativas más prometedoras. A diferencia de la programación tradicional, el RL no se basa en reglas predefinidas. En su lugar, un \enquote{agente} aprende a tomar decisiones interactuando directamente con un entorno, recibiendo recompensas (o penalizaciones) según qué tan buenas sean sus acciones a lo largo del tiempo. Dado que armar una ruta logística es esencialmente una secuencia de decisiones continuas (elegir a qué cliente ir después de otro), el aprendizaje por refuerzo resulta ideal para abordar esta clase de problemas combinatorios~\cite{SuttonBarto2014}.
+
+La viabilidad de esta idea en logística quedó demostrada en trabajos como el de ~\cite{nazari2018reinforcementlearningsolvingvehicle}. En su investigación, reemplazaron las heurísticas de construcción por una red neuronal profunda entrenada usando aprendizaje por refuerzo. El agente tomaba decisiones observando el \enquote{estado} actual del sistema (como la capacidad restante del vehículo y las coordenadas de los clientes pendientes) y elegía el próximo destino de forma autónoma. Este enfoque demostró que un modelo puede aprender estrategias de ruteo altamente competitivas a partir de la experiencia.
+
+% NUEVOS PARRAFOS %
+El trabajo de~\cite{nazari2018reinforcementlearningsolvingvehicle} consolidó toda una línea de investigación conocida como \textit{construcción secuencial}, en la que el agente arma la solución nodo a nodo. Sus raíces conceptuales se remontan a las \textit{Pointer Networks}~\cite{VinyalsPointerNetworks2015}, que introdujeron la idea de \enquote{apuntar} a elementos de la entrada como decisiones secuenciales, y a~\cite{Bello2017}, que aplicó por primera vez el aprendizaje por refuerzo para aprender heurísticas constructivas sobre el problema del vendedor viajero. Posteriormente,~\cite{Kool2019} reemplazó la arquitectura recurrente por un modelo basado en mecanismos de atención, mejorando notablemente la calidad de las soluciones, y~\cite{Kwon2020POMO} refinó el entrenamiento aprovechando la existencia de múltiples soluciones óptimas equivalentes. Esta familia de métodos constructivos puros ha demostrado ser altamente efectiva, pero su desarrollo se ha concentrado casi exclusivamente en variantes \textit{no periódicas} del ruteo, como el CVRP y sus extensiones~\cite{Bogyrbayeva2024}.
+% AQUI TERMINAN LOS NUEVOS PARRAFOS %
+
+No obstante, cuando escalamos la dificultad hacia variantes que incluyen múltiples días, como el PVRP, pretender que un agente aprenda simultáneamente la asignación temporal y espacial desde cero es un desafío computacional enorme. Por esta razón, las investigaciones más recientes y exitosas se han enfocado en sistemas \enquote{híbridos}, integrando la rigurosidad de la optimización clásica con la capacidad adaptativa del aprendizaje por refuerzo.
+
+Un excelente ejemplo de esta hibridación es el trabajo desarrollado por ~\cite{Chen}. Ellos aplicaron este concepto a una variante compleja del ruteo periódico (OPVRPTW) combinando RL con la metaheurística VNS. En lugar de usar el RL para mover los camiones cliente por cliente, utilizaron al agente como un \enquote{director de orquesta} de alto nivel. El agente aprendió a decidir dinámicamente qué operador de vecindad debía aplicar el VNS en cada iteración del algoritmo, logrando sacar al sistema de los óptimos locales con mucha mayor rapidez y superando el rendimiento de un VNS tradicional calibrado a mano.
+
+% NUEVOS PARRAFOS %
+Es importante precisar la naturaleza de este antecedente: en el trabajo de~\cite{Chen}, el aprendizaje por refuerzo no construye las rutas, sino que \textit{guía} la selección de operadores dentro de la fase de mejora local de la metaheurística. Corresponde, por tanto, a un enfoque híbrido RL+metaheurística, y no a un constructor secuencial que resuelva el problema periódico de principio a fin~\cite{Shahbazian2024}.
+
+Del panorama anterior se desprende una brecha clara en la literatura. Los métodos de construcción secuencial pura han alcanzado gran madurez, pero sobre variantes no periódicas del ruteo, mientras que el ruteo periódico solo ha sido abordado mediante los esquemas híbridos ya mencionados. En la revisión bibliográfica realizada no se identificó un antecedente que aplique un enfoque de RL constructivo puro directamente sobre el Periodic Vehicle Routing Problem clásico, en el que la asignación de los días de visita emerja del propio proceso de construcción. Es precisamente en este punto de encuentro donde se sitúa la propuesta de esta memoria, cuyo detalle se desarrolla en el Capítulo 3.
+
+Cabe finalmente advertir una ambigüedad de nomenclatura reciente: la sigla PVRP ha comenzado a emplearse también para el \textit{Profiled Vehicle Routing Problem}~\cite{Hua2025CAMP}, una variante que modela perfiles entre vehículos y clientes y que no guarda relación con la dimensión temporal del problema periódico abordado en este trabajo.
+% AQUI TERMINAN LOS NUEVOS PARRAFOS %
+
+%\javi{Profe!! amplié esta sección para dejar clara la novedad!! cerré marcando el vacío donde se ubica mi propuesta}
+
+%=============================================================%
+\subsection{Modelado del PVRP como proceso de decisión secuencial} \label{sec:Modelado}
+%=============================================================%
+Para aplicar este marco tecnológico a la resolución del Periodic Vehicle Routing Problem (PVRP), es necesario traducir la estructura del problema logístico al marco del Aprendizaje por Refuerzo. Esto implica reformular el PVRP como un Proceso de Decisión de Markov (MDP), donde la construcción de la solución no se obtiene de manera estática y global, sino de forma secuencial, paso a paso~\cite{SuttonBarto2014, bengio2020machinelearningcombinatorialoptimization}.
+
+Para aplicar este marco al PVRP es necesario traducir la estructura del problema logístico al lenguaje del Aprendizaje por Refuerzo, reformulándolo como un Proceso de Decisión de Markov (MDP). Bajo esta perspectiva, la solución no se obtiene de forma estática y global, sino de manera secuencial: un agente observa el estado del sistema, selecciona una acción y recibe una recompensa, repitiendo este ciclo hasta completar el horizonte de planificación ~\cite{SuttonBarto2014, bengio2020machinelearningcombinatorialoptimization}. Los tres componentes de este MDP: la representación del estado, el espacio de acciones y la función de recompensa, admiten múltiples diseños posibles, y su especificación concreta constituye una de las contribuciones centrales de esta memoria. Dicha formulación se desarrolla en detalle en el Capítulo 3.
+
+Esta formulación secuencial establece la base metodológica para aplicar el aprendizaje automático a problemas combinatorios. Al plantear el PVRP bajo la estructura genérica de un MDP, se habilita teóricamente el diseño de modelos basados en aprendizaje por refuerzo, sentando los fundamentos conceptuales para el desarrollo de la arquitectura propuesta en los capítulos posteriores de esta investigación~\cite{bengio2020machinelearningcombinatorialoptimization, bertsimas2018predictiveprescriptiveanalytics}.
+
+
+

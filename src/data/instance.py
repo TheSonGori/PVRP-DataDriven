@@ -12,7 +12,7 @@ usados por el resto del proyecto (entorno, baselines, agente).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 
 # Cliente del PVRP: posición, demanda, frecuencia y patrones de visita permitidos.
@@ -55,6 +55,13 @@ class Instance:
     capacity: float
     max_duration: float = 0.0
 
+    # Índice id -> Customer, construido de forma perezosa la primera vez que se
+    # consulta. No forma parte del constructor ni de la comparación: es solo
+    # una caché para evitar el barrido lineal en get_customer.
+    _customer_index: Dict[int, Customer] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
+
     # Número de clientes (sin contar el depósito).
     @property
     def num_customers(self) -> int:
@@ -66,11 +73,14 @@ class Instance:
         return self.num_customers + 1
 
     # Busca y devuelve el cliente con el ID indicado; lanza KeyError si no existe.
+    # Usa un índice cacheado: se reconstruye solo si cambió la cantidad de clientes.
     def get_customer(self, customer_id: int) -> Customer:
-        for c in self.customers:
-            if c.id == customer_id:
-                return c
-        raise KeyError(f"No existe un cliente con ID {customer_id}")
+        if len(self._customer_index) != len(self.customers):
+            self._customer_index = {c.id: c for c in self.customers}
+        try:
+            return self._customer_index[customer_id]
+        except KeyError:
+            raise KeyError(f"No existe un cliente con ID {customer_id}") from None
 
     def __repr__(self) -> str:
         return (

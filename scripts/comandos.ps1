@@ -1,0 +1,2 @@
+python -u scripts/multi_seed.py --instance p05 --seeds 0 1 2 3 4 --timesteps 500000 --net-arch 512 512 --save-models | Tee-Object -FilePath results/multiseed_p05.txt
+python -u scripts/multi_seed.py --instance p08 --seeds 0 1 2 3 4 --timesteps 500000 --net-arch 512 512 --save-models | Tee-Object -FilePath results/multiseed_p08.txt

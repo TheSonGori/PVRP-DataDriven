@@ -20,6 +20,22 @@ from src.data.instance import Instance
 from src.utils.distance import build_distance_matrix, build_id_to_index_map
 
 
+# Matriz de distancias y mapa id->índice de una instancia, cacheados en la
+# propia instancia. La geometría no cambia durante una búsqueda, de modo que
+# reconstruirlos en cada evaluación de costo es trabajo desperdiciado. La caché
+# se invalida sola si cambia la cantidad de clientes.
+def _geometry(instance: Instance) -> Tuple[np.ndarray, dict]:
+    cache = getattr(instance, "_geometry_cache", None)
+    if cache is None or cache[0] != len(instance.customers):
+        cache = (
+            len(instance.customers),
+            build_distance_matrix(instance),
+            build_id_to_index_map(instance),
+        )
+        instance._geometry_cache = cache
+    return cache[1], cache[2]
+
+
 # Ruta de un vehículo en un día: secuencia de nodos que empieza y termina en el depósito.
 @dataclass
 class Route:
@@ -64,8 +80,7 @@ class Solution:
 
     # Costo total: suma de distancias euclidianas recorridas en todas las rutas.
     def total_cost(self, instance: Instance) -> float:
-        matrix = build_distance_matrix(instance)
-        id_to_idx = build_id_to_index_map(instance)
+        matrix, id_to_idx = _geometry(instance)
 
         total = 0.0
         for route in self.routes:
